@@ -19,11 +19,45 @@ class JiraService: ObservableObject {
     @Published var availableEpics: Set<String> = []
     @Published var availableSprints: [JiraSprint] = []
 
+    // Epic summaries (epic key -> summary)
+    @Published var epicSummaries: [String: String] = [:]
+
     // Current filters
     @Published var filters = IssueFilters()
 
     init() {
+        loadPersistedFilters()
         loadInitialData()
+    }
+
+    private func loadPersistedFilters() {
+        if let data = UserDefaults.standard.data(forKey: "savedFilters"),
+           let decoded = try? JSONDecoder().decode(PersistedFilters.self, from: data) {
+            filters.projects = Set(decoded.projects)
+            filters.statuses = Set(decoded.statuses)
+            filters.assignees = Set(decoded.assignees)
+            filters.issueTypes = Set(decoded.issueTypes)
+            filters.epics = Set(decoded.epics)
+            filters.sprints = Set(decoded.sprints)
+            filters.showOnlyMyIssues = decoded.showOnlyMyIssues
+            print("📦 Loaded persisted filters: \(filters)")
+        }
+    }
+
+    func saveFilters() {
+        let persisted = PersistedFilters(
+            projects: Array(filters.projects),
+            statuses: Array(filters.statuses),
+            assignees: Array(filters.assignees),
+            issueTypes: Array(filters.issueTypes),
+            epics: Array(filters.epics),
+            sprints: Array(filters.sprints),
+            showOnlyMyIssues: filters.showOnlyMyIssues
+        )
+        if let encoded = try? JSONEncoder().encode(persisted) {
+            UserDefaults.standard.set(encoded, forKey: "savedFilters")
+            print("💾 Saved filters: \(filters)")
+        }
     }
 
     func loadInitialData() {
@@ -135,6 +169,9 @@ class JiraService: ObservableObject {
                 self.isLoading = false
                 self.errorMessage = nil
             }
+
+            // Fetch epic summaries for all epics in the result set
+            await fetchEpicSummaries()
         } catch {
             print("Error fetching issues: \(error)")
             await MainActor.run {
@@ -261,6 +298,71 @@ class JiraService: ObservableObject {
         }
     }
 
+    func fetchEpicSummaries() async {
+        // Collect all unique epic keys from current issues
+        let epicKeys = Set(issues.compactMap { $0.fields.customfield_10014 })
+
+        print("📚 Fetching summaries for \(epicKeys.count) epics: \(epicKeys)")
+
+        guard !epicKeys.isEmpty else {
+            print("📚 No epics to fetch")
+            return
+        }
+
+        // Build JQL to fetch all these epics
+        let epicKeysArray = Array(epicKeys)
+        let jql = "key in (\(epicKeysArray.map { "\"\($0)\"" }.joined(separator: ", ")))"
+
+        print("📚 Epic JQL: \(jql)")
+
+        guard let url = URL(string: "\(config.jiraBaseURL)/rest/api/3/search/jql") else {
+            print("📚 Invalid URL for epic search")
+            return
+        }
+
+        var request = createRequest(url: url)
+        request.httpMethod = "POST"
+
+        let requestBody: [String: Any] = [
+            "jql": jql,
+            "maxResults": epicKeys.count,
+            "fields": ["summary"]
+        ]
+
+        do {
+            request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
+
+            let (data, response) = try await URLSession.shared.data(for: request)
+
+            if let httpResponse = response as? HTTPURLResponse {
+                print("📚 Epic fetch response status: \(httpResponse.statusCode)")
+                if httpResponse.statusCode != 200 {
+                    if let errorMsg = String(data: data, encoding: .utf8) {
+                        print("📚 Epic fetch error: \(errorMsg)")
+                    }
+                    return
+                }
+            }
+
+            let searchResponse = try JSONDecoder().decode(EpicSummaryResponse.self, from: data)
+
+            print("📚 Fetched \(searchResponse.issues.count) epic summaries")
+
+            let summaries = Dictionary(uniqueKeysWithValues: searchResponse.issues.map { ($0.key, $0.fields.summary) })
+
+            for (key, summary) in summaries {
+                print("📚   \(key): \(summary)")
+            }
+
+            await MainActor.run {
+                self.epicSummaries = summaries
+                print("📚 Epic summaries updated: \(self.epicSummaries.keys)")
+            }
+        } catch {
+            print("📚 Failed to fetch epic summaries: \(error)")
+        }
+    }
+
     private func updateAvailableFilters() {
         availableStatuses = Set(issues.map { $0.status })
         availableAssignees = Set(issues.compactMap { $0.assignee })
@@ -290,6 +392,7 @@ class JiraService: ObservableObject {
     }
 
     func applyFilters() {
+        saveFilters()
         Task {
             await fetchMyIssues()
         }

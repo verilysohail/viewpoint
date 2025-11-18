@@ -8,6 +8,7 @@ struct ContentView: View {
     @AppStorage("sortDirection") private var sortDirectionRaw: String = "descending"
     @AppStorage("groupOption") private var groupOptionRaw: String = "none"
     @AppStorage("textSize") private var textSize: Double = 1.0
+    @AppStorage("filterPanelHeight") private var filterPanelHeight: Double = 200
     @State private var showingLogWorkForSelected = false
     @AppStorage("colorScheme") private var colorSchemePreference: String = "auto"
 
@@ -72,7 +73,15 @@ struct ContentView: View {
             case .status:
                 return issue.status
             case .epic:
-                return issue.epic ?? "No Epic"
+                if let epicKey = issue.fields.customfield_10014 {
+                    if let epicSummary = jiraService.epicSummaries[epicKey] {
+                        print("🔍 Found epic summary for \(epicKey): \(epicSummary)")
+                        return "\(epicKey): \(epicSummary)"
+                    }
+                    print("🔍 No epic summary found for \(epicKey), available keys: \(jiraService.epicSummaries.keys)")
+                    return epicKey
+                }
+                return "No Epic"
             case .initiative:
                 // For now, use project as initiative placeholder
                 return issue.project
@@ -92,7 +101,7 @@ struct ContentView: View {
                 // Filter panel (resizable)
                 if showFilters {
                     FilterPanel()
-                        .frame(minHeight: 100, idealHeight: 200, maxHeight: .infinity)
+                        .frame(minHeight: 100, idealHeight: filterPanelHeight, maxHeight: .infinity)
                         .layoutPriority(0)
                 }
 
@@ -339,6 +348,22 @@ struct IssueRow: View {
         return .system(size: baseSize * textSizeMultiplier)
     }
 
+    private var issueURL: URL? {
+        let urlString = "\(Configuration.shared.jiraBaseURL)/browse/\(issue.key)"
+        return URL(string: urlString)
+    }
+
+    private func openInBrowser() {
+        guard let url = issueURL else { return }
+        NSWorkspace.shared.open(url)
+    }
+
+    private func copyLink() {
+        guard let url = issueURL else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(url.absoluteString, forType: .string)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
@@ -432,6 +457,18 @@ struct IssueRow: View {
             }
         }
         .padding(.vertical, 4)
+        .onTapGesture(count: 2) {
+            openInBrowser()
+        }
+        .contextMenu {
+            Button(action: copyLink) {
+                Label("Copy Link", systemImage: "link")
+            }
+
+            Button(action: { showingLogWork = true }) {
+                Label("Log Work", systemImage: "clock.fill")
+            }
+        }
         .sheet(isPresented: $showingLogWork) {
             LogWorkView(issue: issue, isPresented: $showingLogWork)
         }

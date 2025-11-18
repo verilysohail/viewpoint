@@ -117,7 +117,30 @@ struct JiraSprintResponse: Codable {
     let values: [JiraSprint]
 }
 
+struct EpicSummaryResponse: Codable {
+    let issues: [EpicSummaryIssue]
+}
+
+struct EpicSummaryIssue: Codable {
+    let key: String
+    let fields: EpicSummaryFields
+}
+
+struct EpicSummaryFields: Codable {
+    let summary: String
+}
+
 // MARK: - Filter Models
+
+struct PersistedFilters: Codable {
+    var projects: [String]
+    var statuses: [String]
+    var assignees: [String]
+    var issueTypes: [String]
+    var epics: [String]
+    var sprints: [Int]
+    var showOnlyMyIssues: Bool
+}
 
 struct IssueFilters {
     var statuses: Set<String> = []
