@@ -302,10 +302,7 @@ class JiraService: ObservableObject {
         // Collect all unique epic keys from current issues
         let epicKeys = Set(issues.compactMap { $0.fields.customfield_10014 })
 
-        print("📚 Fetching summaries for \(epicKeys.count) epics: \(epicKeys)")
-
         guard !epicKeys.isEmpty else {
-            print("📚 No epics to fetch")
             return
         }
 
@@ -313,10 +310,7 @@ class JiraService: ObservableObject {
         let epicKeysArray = Array(epicKeys)
         let jql = "key in (\(epicKeysArray.map { "\"\($0)\"" }.joined(separator: ", ")))"
 
-        print("📚 Epic JQL: \(jql)")
-
         guard let url = URL(string: "\(config.jiraBaseURL)/rest/api/3/search/jql") else {
-            print("📚 Invalid URL for epic search")
             return
         }
 
@@ -335,7 +329,6 @@ class JiraService: ObservableObject {
             let (data, response) = try await URLSession.shared.data(for: request)
 
             if let httpResponse = response as? HTTPURLResponse {
-                print("📚 Epic fetch response status: \(httpResponse.statusCode)")
                 if httpResponse.statusCode != 200 {
                     if let errorMsg = String(data: data, encoding: .utf8) {
                         print("📚 Epic fetch error: \(errorMsg)")
@@ -345,18 +338,10 @@ class JiraService: ObservableObject {
             }
 
             let searchResponse = try JSONDecoder().decode(EpicSummaryResponse.self, from: data)
-
-            print("📚 Fetched \(searchResponse.issues.count) epic summaries")
-
             let summaries = Dictionary(uniqueKeysWithValues: searchResponse.issues.map { ($0.key, $0.fields.summary) })
-
-            for (key, summary) in summaries {
-                print("📚   \(key): \(summary)")
-            }
 
             await MainActor.run {
                 self.epicSummaries = summaries
-                print("📚 Epic summaries updated: \(self.epicSummaries.keys)")
             }
         } catch {
             print("📚 Failed to fetch epic summaries: \(error)")

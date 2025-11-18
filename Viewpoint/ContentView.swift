@@ -8,9 +8,11 @@ struct ContentView: View {
     @AppStorage("sortDirection") private var sortDirectionRaw: String = "descending"
     @AppStorage("groupOption") private var groupOptionRaw: String = "none"
     @AppStorage("textSize") private var textSize: Double = 1.0
-    @AppStorage("filterPanelHeight") private var filterPanelHeight: Double = 200
+    @AppStorage("filterPanelHeight") private var filterPanelHeight: Double = 0
     @State private var showingLogWorkForSelected = false
     @AppStorage("colorScheme") private var colorSchemePreference: String = "auto"
+    @State private var searchText: String = ""
+    @FocusState private var isSearchFocused: Bool
 
     private var sortOption: SortOption {
         SortOption.allCases.first { $0.rawValue == sortOptionRaw } ?? .dateCreated
@@ -32,8 +34,20 @@ struct ContentView: View {
         }
     }
 
+    var filteredIssues: [JiraIssue] {
+        if searchText.isEmpty {
+            return jiraService.issues
+        }
+
+        let lowercasedSearch = searchText.lowercased()
+        return jiraService.issues.filter { issue in
+            issue.key.lowercased().contains(lowercasedSearch) ||
+            issue.summary.lowercased().contains(lowercasedSearch)
+        }
+    }
+
     var sortedIssues: [JiraIssue] {
-        let sorted = jiraService.issues.sorted { issue1, issue2 in
+        let sorted = filteredIssues.sorted { issue1, issue2 in
             let ascending = sortDirection == .ascending
             switch sortOption {
             case .status:
@@ -75,10 +89,8 @@ struct ContentView: View {
             case .epic:
                 if let epicKey = issue.fields.customfield_10014 {
                     if let epicSummary = jiraService.epicSummaries[epicKey] {
-                        print("🔍 Found epic summary for \(epicKey): \(epicSummary)")
                         return "\(epicKey): \(epicSummary)"
                     }
-                    print("🔍 No epic summary found for \(epicKey), available keys: \(jiraService.epicSummaries.keys)")
                     return epicKey
                 }
                 return "No Epic"
@@ -91,21 +103,27 @@ struct ContentView: View {
         return grouped.sorted { $0.key < $1.key }
     }
 
-    var body: some View {
-        VStack(spacing: 0) {
-            // Header with title and refresh
-            HeaderView()
+    private func filterHeight(totalHeight: CGFloat) -> CGFloat {
+        // Subtract header height (approximately 80px)
+        let availableHeight = totalHeight - 80
 
-            // Use VSplitView to make filter panel and issue list resizable
-            VSplitView {
-                // Filter panel (resizable)
+        // Filter panel gets 20% of available space (issue list gets 80%)
+        return availableHeight * 0.2
+    }
+
+    var body: some View {
+        GeometryReader { geometry in
+            VStack(spacing: 0) {
+                // Header with title and refresh
+                HeaderView(filteredCount: filteredIssues.count, searchText: searchText)
+
+                // Filter panel (fixed 30% height)
                 if showFilters {
                     FilterPanel()
-                        .frame(minHeight: 100, idealHeight: filterPanelHeight, maxHeight: .infinity)
-                        .layoutPriority(0)
+                        .frame(height: filterHeight(totalHeight: geometry.size.height))
                 }
 
-                // Issue list
+                // Issue list (takes remaining space)
                 Group {
                     if jiraService.isLoading {
                         ProgressView("Loading issues...")
@@ -125,8 +143,7 @@ struct ContentView: View {
                         IssueListView(selectedIssue: $selectedIssue, groupedIssues: groupedIssues)
                     }
                 }
-                .frame(minHeight: 200)
-                .layoutPriority(1)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .sheet(isPresented: $showingLogWorkForSelected) {
@@ -134,14 +151,14 @@ struct ContentView: View {
                 LogWorkView(issue: issue, isPresented: $showingLogWorkForSelected)
             }
         }
-        .toolbar {
-            ToolbarItem(placement: .navigation) {
+        .toolbar(id: "mainToolbar") {
+            ToolbarItem(id: "toggleFilters", placement: .navigation, showsByDefault: true) {
                 Button(action: { showFilters.toggle() }) {
                     Image(systemName: showFilters ? "chevron.up" : "chevron.down")
                 }
             }
 
-            ToolbarItem(placement: .automatic) {
+            ToolbarItem(id: "logWork", placement: .automatic, showsByDefault: true) {
                 // Log work for selected issue
                 Button(action: {
                     if selectedIssue != nil {
@@ -155,7 +172,7 @@ struct ContentView: View {
                 .disabled(selectedIssue == nil)
             }
 
-            ToolbarItem(placement: .automatic) {
+            ToolbarItem(id: "controls", placement: .automatic, showsByDefault: true) {
                 HStack(spacing: 12) {
                     // Dark mode toggle
                     Menu {
@@ -275,6 +292,65 @@ struct ContentView: View {
                     .help("Refresh issues")
                 }
             }
+
+            // Search field on the far right
+            ToolbarItem(id: "search", placement: .automatic, showsByDefault: true) {
+                HStack(spacing: 8) {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundColor(.secondary)
+                    TextField("Search issues...", text: $searchText)
+                        .textFieldStyle(.plain)
+                        .frame(width: 200)
+                        .focused($isSearchFocused)
+                    if !searchText.isEmpty {
+                        Button(action: { searchText = "" }) {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundColor(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Color(NSColor.controlBackgroundColor))
+                .cornerRadius(6)
+            }
+
+            // Hidden keyboard shortcut for search
+            ToolbarItem(id: "searchShortcut", placement: .automatic, showsByDefault: false) {
+                Button("") {
+                    isSearchFocused = true
+                }
+                .keyboardShortcut("f", modifiers: .command)
+                .opacity(0)
+                .frame(width: 0, height: 0)
+                .help("Focus search (⌘F)")
+            }
+
+            // Flexible space items for customization
+            ToolbarItem(id: "flexibleSpace1", placement: .automatic, showsByDefault: false) {
+                Spacer()
+            }
+
+            ToolbarItem(id: "flexibleSpace2", placement: .automatic, showsByDefault: false) {
+                Spacer()
+            }
+
+            // Fixed space items for customization
+            ToolbarItem(id: "fixedSpace1", placement: .automatic, showsByDefault: false) {
+                Spacer()
+                    .frame(width: 20)
+            }
+
+            ToolbarItem(id: "fixedSpace2", placement: .automatic, showsByDefault: false) {
+                Spacer()
+                    .frame(width: 20)
+            }
+
+            ToolbarItem(id: "fixedSpace3", placement: .automatic, showsByDefault: false) {
+                Spacer()
+                    .frame(width: 20)
+            }
         }
         .environment(\.textSizeMultiplier, textSize)
         .preferredColorScheme(colorScheme)
@@ -285,6 +361,8 @@ struct ContentView: View {
 
 struct HeaderView: View {
     @EnvironmentObject var jiraService: JiraService
+    let filteredCount: Int
+    let searchText: String
 
     var body: some View {
         HStack {
@@ -292,9 +370,15 @@ struct HeaderView: View {
                 Text("Viewpoint")
                     .font(.title)
                     .fontWeight(.bold)
-                Text("\(jiraService.issues.count) issues")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
+                if !searchText.isEmpty && filteredCount != jiraService.issues.count {
+                    Text("\(filteredCount) of \(jiraService.issues.count) issues")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                } else {
+                    Text("\(jiraService.issues.count) issues")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
             }
 
             Spacer()
