@@ -1,0 +1,25 @@
+# Xcode
+.DS_Store
+*.xcuserstate
+*.xcuserdatad
+xcuserdata/
+*.xcworkspace/
+!*.xcworkspace/contents.xcworkspacedata
+
+# Swift Package Manager
+.build/
+.swiftpm/
+
+# Environment
+.env
+
+# Build artifacts
+build/
+DerivedData/
+*.dSYM.zip
+*.ipa
+
+# macOS
+.Trash
+.Spotlight-V100
+.fseventsd

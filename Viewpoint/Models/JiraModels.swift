@@ -1,0 +1,234 @@
+import Foundation
+
+// MARK: - Issue Models
+
+struct JiraIssue: Codable, Identifiable, Hashable {
+    let id: String
+    let key: String
+    let fields: IssueFields
+
+    var summary: String { fields.summary }
+    var status: String { fields.status.name }
+    var assignee: String? { fields.assignee?.displayName }
+    var issueType: String { fields.issuetype.name }
+    var project: String { fields.project.name }
+    var epic: String? { fields.customfield_10014 } // Epic link field
+    var priority: String? { fields.priority?.name }
+    var created: Date? { ISO8601DateFormatter().date(from: fields.created ?? "") }
+    var updated: Date? { ISO8601DateFormatter().date(from: fields.updated ?? "") }
+}
+
+struct IssueFields: Codable, Hashable {
+    let summary: String
+    let status: StatusField
+    let assignee: UserField?
+    let issuetype: IssueTypeField
+    let project: ProjectField
+    let priority: PriorityField?
+    let created: String?
+    let updated: String?
+    let customfield_10014: String? // Epic Link
+    let customfield_10016: Double? // Story Points
+    let customfield_10020: [SprintField]? // Sprint
+    let timeoriginalestimate: Int? // Original Estimate (seconds)
+    let timespent: Int? // Time Logged (seconds)
+    let timeestimate: Int? // Time Remaining (seconds)
+
+    // Coding keys to handle optional fields
+    enum CodingKeys: String, CodingKey {
+        case summary, status, assignee, issuetype, project, priority, created, updated
+        case customfield_10014, customfield_10016, customfield_10020
+        case timeoriginalestimate, timespent, timeestimate
+    }
+}
+
+struct SprintField: Codable, Hashable {
+    let id: Int
+    let name: String
+    let state: String?
+}
+
+struct StatusField: Codable, Hashable {
+    let name: String
+    let statusCategory: StatusCategory?
+}
+
+struct StatusCategory: Codable, Hashable {
+    let key: String
+    let name: String
+}
+
+struct UserField: Codable, Hashable {
+    let displayName: String
+    let emailAddress: String?
+}
+
+struct IssueTypeField: Codable, Hashable {
+    let name: String
+    let iconUrl: String?
+}
+
+struct ProjectField: Codable, Hashable {
+    let id: String
+    let key: String
+    let name: String
+}
+
+struct PriorityField: Codable, Hashable {
+    let name: String
+    let iconUrl: String?
+}
+
+// MARK: - Sprint Models
+
+struct JiraSprint: Codable, Identifiable {
+    let id: Int
+    let name: String
+    let state: String
+    let startDate: String?
+    let endDate: String?
+    let goal: String?
+}
+
+struct SprintInfo {
+    let sprint: JiraSprint
+    let issues: [JiraIssue]
+    var totalIssues: Int { issues.count }
+    var completedIssues: Int {
+        issues.filter { $0.fields.status.statusCategory?.key == "done" }.count
+    }
+    var inProgressIssues: Int {
+        issues.filter { $0.fields.status.statusCategory?.key == "indeterminate" }.count
+    }
+    var todoIssues: Int {
+        issues.filter { $0.fields.status.statusCategory?.key == "new" }.count
+    }
+}
+
+// MARK: - API Response Models
+
+struct JiraSearchResponse: Codable {
+    let issues: [JiraIssue]
+    let total: Int?
+    let maxResults: Int?
+}
+
+struct JiraSprintResponse: Codable {
+    let values: [JiraSprint]
+}
+
+// MARK: - Filter Models
+
+struct IssueFilters {
+    var statuses: Set<String> = []
+    var assignees: Set<String> = []
+    var issueTypes: Set<String> = []
+    var projects: Set<String> = []
+    var epics: Set<String> = []
+    var sprints: Set<Int> = []
+    var startDate: Date?
+    var endDate: Date?
+    var showOnlyMyIssues: Bool = true
+
+    func buildJQL(userEmail: String) -> String {
+        var jqlParts: [String] = []
+
+        // PRIMARY FILTER: Project (if selected, this narrows down everything else)
+        if !projects.isEmpty {
+            let projectList = projects.map { "\"\($0)\"" }.joined(separator: ", ")
+            jqlParts.append("project IN (\(projectList))")
+        }
+
+        // SECONDARY FILTER: Assignee
+        if !assignees.isEmpty {
+            // User has explicitly selected assignees
+            let assigneeList = assignees.map { "\"\($0)\"" }.joined(separator: ", ")
+            jqlParts.append("assignee IN (\(assigneeList))")
+        } else if showOnlyMyIssues {
+            // Default: show only my issues
+            jqlParts.append("assignee = currentUser()")
+        }
+        // If assignees is empty and showOnlyMyIssues is false, show all issues
+
+        // OTHER FILTERS (applied after project and assignee)
+        if !statuses.isEmpty {
+            let statusList = statuses.map { "\"\($0)\"" }.joined(separator: ", ")
+            jqlParts.append("status IN (\(statusList))")
+        }
+
+        if !issueTypes.isEmpty {
+            let typeList = issueTypes.map { "\"\($0)\"" }.joined(separator: ", ")
+            jqlParts.append("type IN (\(typeList))")
+        }
+
+        if !epics.isEmpty {
+            let epicList = epics.map { "\"\($0)\"" }.joined(separator: ", ")
+            jqlParts.append("\"Epic Link\" IN (\(epicList))")
+        }
+
+        if !sprints.isEmpty {
+            let sprintList = sprints.map { String($0) }.joined(separator: ", ")
+            jqlParts.append("sprint IN (\(sprintList))")
+        }
+
+        if let start = startDate {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "yyyy-MM-dd"
+            jqlParts.append("created >= \"\(formatter.string(from: start))\"")
+        }
+
+        if let end = endDate {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "yyyy-MM-dd"
+            jqlParts.append("created <= \"\(formatter.string(from: end))\"")
+        }
+
+        // Return a valid JQL query, or a default one if no filters are set
+        if jqlParts.isEmpty {
+            return "order by updated DESC"
+        }
+
+        return jqlParts.joined(separator: " AND ") + " order by updated DESC"
+    }
+}
+
+// MARK: - Transition Models
+
+struct TransitionInfo {
+    let id: String
+    let name: String
+    let requiredFields: [TransitionField]
+}
+
+struct TransitionField {
+    let key: String
+    let name: String
+    let allowedValues: [String]
+}
+
+// MARK: - Sorting and Grouping
+
+enum SortOption: String, CaseIterable, Identifiable {
+    case status = "Status"
+    case dateCreated = "Date Created"
+    case dateUpdated = "Date Updated"
+    case assignee = "Assignee"
+    case epic = "Epic"
+
+    var id: String { rawValue }
+}
+
+enum SortDirection: String, CaseIterable {
+    case ascending = "Ascending"
+    case descending = "Descending"
+}
+
+enum GroupOption: String, CaseIterable, Identifiable {
+    case none = "None"
+    case assignee = "Assignee"
+    case status = "Status"
+    case epic = "Epic"
+    case initiative = "Initiative"
+
+    var id: String { rawValue }
+}
