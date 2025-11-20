@@ -40,7 +40,7 @@ class JiraService: ObservableObject {
             filters.epics = Set(decoded.epics)
             filters.sprints = Set(decoded.sprints)
             filters.showOnlyMyIssues = decoded.showOnlyMyIssues
-            print("📦 Loaded persisted filters: \(filters)")
+            Logger.shared.info("Loaded persisted filters: \(filters)")
         }
     }
 
@@ -56,7 +56,7 @@ class JiraService: ObservableObject {
         )
         if let encoded = try? JSONEncoder().encode(persisted) {
             UserDefaults.standard.set(encoded, forKey: "savedFilters")
-            print("💾 Saved filters: \(filters)")
+            Logger.shared.info("Saved filters: \(filters)")
         }
     }
 
@@ -135,8 +135,8 @@ class JiraService: ObservableObject {
         }
 
         do {
-            print("Fetching issues from: \(url)")
-            print("JQL: \(jql)")
+            Logger.shared.info("Fetching issues from: \(url)")
+            Logger.shared.info("JQL: \(jql)")
 
             let (data, response) = try await URLSession.shared.data(for: request)
 
@@ -144,24 +144,24 @@ class JiraService: ObservableObject {
                 throw URLError(.badServerResponse)
             }
 
-            print("Response status: \(httpResponse.statusCode)")
+            Logger.shared.info("Response status: \(httpResponse.statusCode)")
 
             if httpResponse.statusCode != 200 {
                 // Try to parse error message from response
                 if let errorMessage = String(data: data, encoding: .utf8) {
-                    print("Error response: \(errorMessage)")
+                    Logger.shared.error("Error response (\(httpResponse.statusCode)): \(errorMessage)")
                 }
                 throw NSError(domain: "JiraAPI", code: httpResponse.statusCode,
                              userInfo: [NSLocalizedDescriptionKey: "HTTP \(httpResponse.statusCode)"])
             }
 
-            // Print the raw response to see the structure
+            // Log the raw response to see the structure
             if let jsonString = String(data: data, encoding: .utf8) {
-                print("Raw JSON response (first 500 chars): \(jsonString.prefix(500))")
+                Logger.shared.debug("Raw JSON response (first 500 chars): \(jsonString.prefix(500))")
             }
 
             let searchResponse = try JSONDecoder().decode(JiraSearchResponse.self, from: data)
-            print("Successfully fetched \(searchResponse.issues.count) issues")
+            Logger.shared.info("Successfully fetched \(searchResponse.issues.count) issues")
 
             await MainActor.run {
                 self.issues = searchResponse.issues
@@ -173,7 +173,7 @@ class JiraService: ObservableObject {
             // Fetch epic summaries for all epics in the result set
             await fetchEpicSummaries()
         } catch {
-            print("Error fetching issues: \(error)")
+            Logger.shared.error("Error fetching issues: \(error)")
             await MainActor.run {
                 self.errorMessage = "Failed to fetch issues: \(error.localizedDescription)"
                 self.isLoading = false
@@ -195,7 +195,7 @@ class JiraService: ObservableObject {
             if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                let values = json["values"] as? [[String: Any]] {
 
-                print("Found \(values.count) boards")
+                Logger.shared.info("Found \(values.count) boards")
 
                 // Fetch sprints from all boards concurrently
                 var allSprints: [JiraSprint] = []
@@ -222,7 +222,7 @@ class JiraService: ObservableObject {
                 }
             }
         } catch {
-            print("Failed to fetch boards: \(error)")
+            Logger.shared.error("Failed to fetch boards: \(error)")
         }
     }
 
@@ -236,10 +236,10 @@ class JiraService: ObservableObject {
         do {
             let (data, _) = try await URLSession.shared.data(for: request)
             let sprintResponse = try JSONDecoder().decode(JiraSprintResponse.self, from: data)
-            print("Board \(boardId) has \(sprintResponse.values.count) sprints")
+            Logger.shared.info("Board \(boardId) has \(sprintResponse.values.count) sprints")
             return sprintResponse.values
         } catch {
-            print("Failed to fetch sprints for board \(boardId): \(error)")
+            Logger.shared.error("Failed to fetch sprints for board \(boardId): \(error)")
             return []
         }
     }
@@ -331,7 +331,7 @@ class JiraService: ObservableObject {
             if let httpResponse = response as? HTTPURLResponse {
                 if httpResponse.statusCode != 200 {
                     if let errorMsg = String(data: data, encoding: .utf8) {
-                        print("📚 Epic fetch error: \(errorMsg)")
+                        Logger.shared.error("Epic fetch error: \(errorMsg)")
                     }
                     return
                 }
@@ -344,7 +344,7 @@ class JiraService: ObservableObject {
                 self.epicSummaries = summaries
             }
         } catch {
-            print("📚 Failed to fetch epic summaries: \(error)")
+            Logger.shared.error("Failed to fetch epic summaries: \(error)")
         }
     }
 
@@ -503,17 +503,17 @@ class JiraService: ObservableObject {
 
                     if let httpResponse = response as? HTTPURLResponse,
                        httpResponse.statusCode == 204 || httpResponse.statusCode == 200 {
-                        print("Successfully transitioned \(issueKey) to \(newStatus)")
+                        Logger.shared.info("Successfully transitioned \(issueKey) to \(newStatus)")
                         await fetchMyIssues()
                         return true
                     }
                 }
             }
 
-            print("Could not find transition to status: \(newStatus)")
+            Logger.shared.warning("Could not find transition to status: \(newStatus)")
             return false
         } catch {
-            print("Failed to update issue status: \(error)")
+            Logger.shared.error("Failed to update issue status: \(error)")
             return false
         }
     }
@@ -536,7 +536,7 @@ class JiraService: ObservableObject {
         do {
             request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
 
-            print("Logging work for \(issueKey): \(timeSpentSeconds) seconds")
+            Logger.shared.info("Logging work for \(issueKey): \(timeSpentSeconds) seconds")
 
             let (data, response) = try await URLSession.shared.data(for: request)
 
@@ -544,21 +544,21 @@ class JiraService: ObservableObject {
                 throw URLError(.badServerResponse)
             }
 
-            print("Log work response status: \(httpResponse.statusCode)")
+            Logger.shared.info("Log work response status: \(httpResponse.statusCode)")
 
             if httpResponse.statusCode == 201 || httpResponse.statusCode == 200 {
-                print("Successfully logged work for \(issueKey)")
+                Logger.shared.info("Successfully logged work for \(issueKey)")
                 // Refresh issues to update the time logged
                 await fetchMyIssues()
                 return true
             } else {
                 if let errorMessage = String(data: data, encoding: .utf8) {
-                    print("Error logging work: \(errorMessage)")
+                    Logger.shared.error("Error logging work: \(errorMessage)")
                 }
                 return false
             }
         } catch {
-            print("Failed to log work: \(error)")
+            Logger.shared.error("Failed to log work: \(error)")
             return false
         }
     }

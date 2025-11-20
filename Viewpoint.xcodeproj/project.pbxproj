@@ -17,6 +17,7 @@
 		AA0008 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = BB0010 /* Assets.xcassets */; };
 		AA0009 /* PersistentSplitView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0011 /* PersistentSplitView.swift */; };
 		AA0010 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0012 /* SettingsView.swift */; };
+		AA0011 /* Logger.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0013 /* Logger.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -32,6 +33,7 @@
 		BB0010 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		BB0011 /* PersistentSplitView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersistentSplitView.swift; sourceTree = "<group>"; };
 		BB0012 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		BB0013 /* Logger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Logger.swift; sourceTree = "<group>"; };
 		CC0001 /* Viewpoint.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Viewpoint.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -82,6 +84,7 @@
 			isa = PBXGroup;
 			children = (
 				BB0004 /* JiraService.swift */,
+				BB0013 /* Logger.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -191,6 +194,7 @@
 				AA0007 /* Configuration.swift in Sources */,
 				AA0009 /* PersistentSplitView.swift in Sources */,
 				AA0010 /* SettingsView.swift in Sources */,
+				AA0011 /* Logger.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

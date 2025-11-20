@@ -29,6 +29,31 @@ struct SettingsView: View {
                     .font(.caption)
             }
 
+            Section {
+                Text("Logs")
+                    .font(.headline)
+
+                HStack {
+                    Text("Log File Location:")
+                        .font(.caption)
+                    Spacer()
+                    Button("Show in Finder") {
+                        NSWorkspace.shared.selectFile(Logger.shared.getLogFileURL().path, inFileViewerRootedAtPath: "")
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundColor(.blue)
+                }
+
+                HStack {
+                    Spacer()
+                    Button("Clear Log") {
+                        Logger.shared.clearLog()
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundColor(.red)
+                }
+            }
+
             if let error = errorMessage {
                 Text(error)
                     .foregroundColor(.red)
@@ -50,7 +75,7 @@ struct SettingsView: View {
             }
         }
         .padding(20)
-        .frame(width: 500, height: 350)
+        .frame(width: 500, height: 450)
         .onAppear {
             loadAPIKey()
         }

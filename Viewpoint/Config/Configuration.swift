@@ -19,11 +19,10 @@ struct Configuration {
             self.jiraEmail = savedEmail
             self.jiraAPIKey = savedAPIKey
 
-            print("\n=== Configuration loaded from UserDefaults/Keychain ===")
-            print("  Base URL: '\(self.jiraBaseURL)'")
-            print("  Email: '\(self.jiraEmail)'")
-            print("  API Key present: \(!self.jiraAPIKey.isEmpty)")
-            print("=======================================================\n")
+            Logger.shared.info("Configuration loaded from UserDefaults/Keychain")
+            Logger.shared.info("  Base URL: '\(self.jiraBaseURL)'")
+            Logger.shared.info("  Email: '\(self.jiraEmail)'")
+            Logger.shared.info("  API Key present: \(!self.jiraAPIKey.isEmpty)")
             return
         }
 
@@ -50,7 +49,7 @@ struct Configuration {
         for path in possiblePaths {
             if FileManager.default.fileExists(atPath: path) {
                 envPath = path
-                print("Found .env file at: \(path)")
+                Logger.shared.info("Found .env file at: \(path)")
                 break
             }
         }
@@ -77,10 +76,9 @@ struct Configuration {
         self.jiraEmail = envVars["JIRA_EMAIL"] ?? ""
         self.jiraAPIKey = envVars["JIRA_API_KEY"] ?? ""
 
-        print("\n=== Configuration loaded from .env ===")
-        print("  Base URL: '\(self.jiraBaseURL)'")
-        print("  Email: '\(self.jiraEmail)'")
-        print("  API Key present: \(!self.jiraAPIKey.isEmpty)")
-        print("======================================\n")
+        Logger.shared.info("Configuration loaded from .env")
+        Logger.shared.info("  Base URL: '\(self.jiraBaseURL)'")
+        Logger.shared.info("  Email: '\(self.jiraEmail)'")
+        Logger.shared.info("  API Key present: \(!self.jiraAPIKey.isEmpty)")
     }
 }
