@@ -13,7 +13,19 @@ struct ContentView: View {
     @AppStorage("colorScheme") private var colorSchemePreference: String = "auto"
     @State private var searchText: String = ""
     @FocusState private var isSearchFocused: Bool
-    @State private var expandedSections: Set<String> = []
+    @AppStorage("expandedSectionsRaw") private var expandedSectionsRaw: String = ""
+
+    private var expandedSections: Binding<Set<String>> {
+        Binding(
+            get: {
+                guard !expandedSectionsRaw.isEmpty else { return [] }
+                return Set(expandedSectionsRaw.split(separator: ",").map(String.init))
+            },
+            set: { newValue in
+                expandedSectionsRaw = newValue.sorted().joined(separator: ",")
+            }
+        )
+    }
 
     private var sortOption: SortOption {
         SortOption.allCases.first { $0.rawValue == sortOptionRaw } ?? .dateCreated
@@ -105,23 +117,40 @@ struct ContentView: View {
     }
 
     var issueContentView: some View {
-        Group {
-            if jiraService.isLoading {
-                ProgressView("Loading issues...")
+        VStack(spacing: 0) {
+            // Secondary toolbar for list controls
+            IssueListToolbar(
+                searchText: $searchText,
+                isSearchFocused: $isSearchFocused,
+                sortOption: sortOption,
+                sortDirection: sortDirection,
+                groupOption: groupOption,
+                groupedIssues: groupedIssues,
+                expandedSections: expandedSections,
+                onSortOptionChange: { sortOptionRaw = $0.rawValue },
+                onSortDirectionChange: { sortDirectionRaw = $0 == .ascending ? "ascending" : "descending" },
+                onGroupOptionChange: { groupOptionRaw = $0.rawValue }
+            )
+
+            // Issue list content
+            Group {
+                if jiraService.isLoading {
+                    ProgressView("Loading issues...")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if let error = jiraService.errorMessage {
+                    VStack {
+                        Image(systemName: "exclamationmark.triangle")
+                            .font(.system(size: 48))
+                            .foregroundColor(.orange)
+                        Text(error)
+                            .foregroundColor(.secondary)
+                            .multilineTextAlignment(.center)
+                            .padding()
+                    }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if let error = jiraService.errorMessage {
-                VStack {
-                    Image(systemName: "exclamationmark.triangle")
-                        .font(.system(size: 48))
-                        .foregroundColor(.orange)
-                    Text(error)
-                        .foregroundColor(.secondary)
-                        .multilineTextAlignment(.center)
-                        .padding()
+                } else {
+                    IssueListView(selectedIssue: $selectedIssue, groupedIssues: groupedIssues, expandedSections: expandedSections)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                IssueListView(selectedIssue: $selectedIssue, groupedIssues: groupedIssues, expandedSections: $expandedSections)
             }
         }
     }
@@ -166,27 +195,6 @@ struct ContentView: View {
                 .keyboardShortcut("l", modifiers: .command)
                 .help("Log work for selected issue (⌘L)")
                 .disabled(selectedIssue == nil)
-            }
-
-            // Collapse/Expand all buttons (only show when grouping is active)
-            ToolbarItem(id: "groupControls", placement: .automatic, showsByDefault: true) {
-                HStack(spacing: 4) {
-                    if groupedIssues.count > 1 {
-                        Button(action: {
-                            expandedSections = Set(groupedIssues.map { $0.0 })
-                        }) {
-                            Image(systemName: "chevron.down.square")
-                        }
-                        .help("Expand all groups")
-
-                        Button(action: {
-                            expandedSections.removeAll()
-                        }) {
-                            Image(systemName: "chevron.up.square")
-                        }
-                        .help("Collapse all groups")
-                    }
-                }
             }
 
             ToolbarItem(id: "controls", placement: .automatic, showsByDefault: true) {
@@ -239,68 +247,6 @@ struct ContentView: View {
 
                     Divider()
 
-                    // Grouping menu
-                    Menu {
-                        ForEach(GroupOption.allCases) { option in
-                            Button(action: { groupOptionRaw = option.rawValue }) {
-                                HStack {
-                                    Text(option.rawValue)
-                                    if groupOption == option {
-                                        Image(systemName: "checkmark")
-                                    }
-                                }
-                            }
-                        }
-                    } label: {
-                        Label("Group", systemImage: "folder.badge.gearshape")
-                    }
-                    .help("Group issues")
-
-                    Divider()
-
-                    // Sorting menu
-                    Menu {
-                        Section("Sort By") {
-                            ForEach(SortOption.allCases) { option in
-                                Button(action: { sortOptionRaw = option.rawValue }) {
-                                    HStack {
-                                        Text(option.rawValue)
-                                        if sortOption == option {
-                                            Image(systemName: "checkmark")
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        Divider()
-
-                        Section("Direction") {
-                            Button(action: { sortDirectionRaw = "ascending" }) {
-                                HStack {
-                                    Text("Ascending")
-                                    if sortDirection == .ascending {
-                                        Image(systemName: "checkmark")
-                                    }
-                                }
-                            }
-
-                            Button(action: { sortDirectionRaw = "descending" }) {
-                                HStack {
-                                    Text("Descending")
-                                    if sortDirection == .descending {
-                                        Image(systemName: "checkmark")
-                                    }
-                                }
-                            }
-                        }
-                    } label: {
-                        Label("Sort", systemImage: "arrow.up.arrow.down")
-                    }
-                    .help("Sort issues")
-
-                    Divider()
-
                     // Refresh button
                     Button(action: { jiraService.refresh() }) {
                         Label("Refresh", systemImage: "arrow.clockwise")
@@ -308,40 +254,6 @@ struct ContentView: View {
                     .keyboardShortcut("r", modifiers: .command)
                     .help("Refresh issues")
                 }
-            }
-
-            // Search field on the far right
-            ToolbarItem(id: "search", placement: .automatic, showsByDefault: true) {
-                HStack(spacing: 8) {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundColor(.secondary)
-                    TextField("Search issues...", text: $searchText)
-                        .textFieldStyle(.plain)
-                        .frame(width: 200)
-                        .focused($isSearchFocused)
-                    if !searchText.isEmpty {
-                        Button(action: { searchText = "" }) {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundColor(.secondary)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(Color(NSColor.controlBackgroundColor))
-                .cornerRadius(6)
-            }
-
-            // Hidden keyboard shortcut for search
-            ToolbarItem(id: "searchShortcut", placement: .automatic, showsByDefault: false) {
-                Button("") {
-                    isSearchFocused = true
-                }
-                .keyboardShortcut("f", modifiers: .command)
-                .opacity(0)
-                .frame(width: 0, height: 0)
-                .help("Focus search (⌘F)")
             }
 
             // Flexible space for customization
@@ -977,6 +889,138 @@ extension Color {
             green: Double(nsColor.greenComponent * 0.8),
             blue: Double(nsColor.blueComponent * 0.8)
         )
+    }
+}
+
+// MARK: - Issue List Toolbar
+
+struct IssueListToolbar: View {
+    @Binding var searchText: String
+    @FocusState.Binding var isSearchFocused: Bool
+    let sortOption: SortOption
+    let sortDirection: SortDirection
+    let groupOption: GroupOption
+    let groupedIssues: [(String, [JiraIssue])]
+    @Binding var expandedSections: Set<String>
+    let onSortOptionChange: (SortOption) -> Void
+    let onSortDirectionChange: (SortDirection) -> Void
+    let onGroupOptionChange: (GroupOption) -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            // Expand/Collapse all buttons (only show when grouping is active)
+            if groupedIssues.count > 1 {
+                HStack(spacing: 8) {
+                    Button("Expand all") {
+                        expandedSections = Set(groupedIssues.map { $0.0 })
+                    }
+                    .buttonStyle(.plain)
+
+                    Button("Collapse all") {
+                        expandedSections.removeAll()
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                Divider()
+                    .frame(height: 20)
+            }
+
+            // Group menu
+            Menu {
+                ForEach(GroupOption.allCases) { option in
+                    Button(action: { onGroupOptionChange(option) }) {
+                        HStack {
+                            Text(option.rawValue)
+                            if groupOption == option {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+                }
+            } label: {
+                Label("Group", systemImage: "folder.badge.gearshape")
+            }
+            .help("Group issues")
+            .fixedSize()
+
+            // Sort menu
+            Menu {
+                Section("Sort By") {
+                    ForEach(SortOption.allCases) { option in
+                        Button(action: { onSortOptionChange(option) }) {
+                            HStack {
+                                Text(option.rawValue)
+                                if sortOption == option {
+                                    Image(systemName: "checkmark")
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Divider()
+
+                Section("Direction") {
+                    Button(action: { onSortDirectionChange(.ascending) }) {
+                        HStack {
+                            Text("Ascending")
+                            if sortDirection == .ascending {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+
+                    Button(action: { onSortDirectionChange(.descending) }) {
+                        HStack {
+                            Text("Descending")
+                            if sortDirection == .descending {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+                }
+            } label: {
+                Label("Sort", systemImage: "arrow.up.arrow.down")
+            }
+            .help("Sort issues")
+            .fixedSize()
+
+            Spacer()
+
+            // Search field
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundColor(.secondary)
+                TextField("Search issues...", text: $searchText)
+                    .textFieldStyle(.plain)
+                    .focused($isSearchFocused)
+                if !searchText.isEmpty {
+                    Button(action: { searchText = "" }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(Color(NSColor.controlBackgroundColor))
+            .cornerRadius(6)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+        .onAppear {
+            // Register keyboard shortcut for search
+            NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+                if event.modifierFlags.contains(.command) && event.charactersIgnoringModifiers == "f" {
+                    isSearchFocused = true
+                    return nil
+                }
+                return event
+            }
+        }
     }
 }
 
