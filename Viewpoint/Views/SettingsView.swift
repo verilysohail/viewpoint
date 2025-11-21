@@ -8,6 +8,11 @@ struct SettingsView: View {
                     Label("Connection", systemImage: "network")
                 }
 
+            AISettingsTab()
+                .tabItem {
+                    Label("AI", systemImage: "sparkles")
+                }
+
             PerformanceSettingsTab()
                 .tabItem {
                     Label("Performance", systemImage: "gauge")
@@ -19,7 +24,7 @@ struct SettingsView: View {
                 }
         }
         .padding(20)
-        .frame(width: 500, height: 450)
+        .frame(width: 600, height: 550)
     }
 }
 
@@ -37,21 +42,30 @@ struct ConnectionSettingsTab: View {
             Section {
                 Text("Jira Connection Settings")
                     .font(.headline)
+                    .padding(.bottom, 4)
 
-                TextField("Jira Base URL", text: $jiraBaseURL)
-                    .textFieldStyle(.roundedBorder)
-                Text("Example: https://your-company.atlassian.net")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Base URL")
+                        .font(.subheadline)
+                    TextField("https://your-company.atlassian.net", text: $jiraBaseURL)
+                        .textFieldStyle(.roundedBorder)
+                }
 
-                TextField("Email", text: $jiraEmail)
-                    .textFieldStyle(.roundedBorder)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Email")
+                        .font(.subheadline)
+                    TextField("your-email@company.com", text: $jiraEmail)
+                        .textFieldStyle(.roundedBorder)
+                }
 
-                SecureField("API Key", text: $jiraAPIKey)
-                    .textFieldStyle(.roundedBorder)
-
-                Link("How to create an API key", destination: URL(string: "https://id.atlassian.com/manage-profile/security/api-tokens")!)
-                    .font(.caption)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("API Key")
+                        .font(.subheadline)
+                    SecureField("Enter your API key", text: $jiraAPIKey)
+                        .textFieldStyle(.roundedBorder)
+                    Link("Create API key", destination: URL(string: "https://id.atlassian.com/manage-profile/security/api-tokens")!)
+                        .font(.caption)
+                }
             }
 
             if let error = errorMessage {
@@ -115,6 +129,195 @@ struct ConnectionSettingsTab: View {
     private func loadAPIKey() {
         if let apiKey = KeychainHelper.load(key: "jiraAPIKey") {
             jiraAPIKey = apiKey
+        }
+    }
+}
+
+// MARK: - AI Settings Tab
+
+struct AISettingsTab: View {
+    @State private var selectedModel: AIModel = .gemini3ProPreview
+    @State private var configurations: [AIModel: VertexConfig] = [:]
+    @State private var showingSuccess = false
+    @State private var errorMessage: String?
+
+    private let regions = [
+        "us-central1", "us-east1", "us-west1", "us-west4",
+        "europe-west1", "europe-west4", "asia-southeast1"
+    ]
+
+    struct VertexConfig {
+        var projectID: String = ""
+        var region: String = "us-central1"
+        var email: String = ""
+    }
+
+    var body: some View {
+        Form {
+            Section {
+                Text("AI Model Selection")
+                    .font(.headline)
+                    .padding(.bottom, 4)
+
+                Picker("Model", selection: $selectedModel) {
+                    ForEach(AIModel.allCases) { model in
+                        Text(model.displayName).tag(model)
+                    }
+                }
+                .pickerStyle(.radioGroup)
+            }
+
+            Section {
+                Text("Vertex AI Configuration")
+                    .font(.headline)
+                    .padding(.bottom, 4)
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Project ID")
+                        .font(.subheadline)
+                    TextField("my-project-123456", text: Binding(
+                        get: { configurations[selectedModel]?.projectID ?? "" },
+                        set: { newValue in
+                            if configurations[selectedModel] == nil {
+                                configurations[selectedModel] = VertexConfig()
+                            }
+                            configurations[selectedModel]?.projectID = newValue
+                        }
+                    ))
+                    .textFieldStyle(.roundedBorder)
+                }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Region")
+                        .font(.subheadline)
+                    Picker("", selection: Binding(
+                        get: { configurations[selectedModel]?.region ?? "us-central1" },
+                        set: { newValue in
+                            if configurations[selectedModel] == nil {
+                                configurations[selectedModel] = VertexConfig()
+                            }
+                            configurations[selectedModel]?.region = newValue
+                        }
+                    )) {
+                        ForEach(regions, id: \.self) { region in
+                            Text(region).tag(region)
+                        }
+                    }
+                    .labelsHidden()
+                }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Email")
+                        .font(.subheadline)
+                    TextField("your-email@example.com", text: Binding(
+                        get: { configurations[selectedModel]?.email ?? "" },
+                        set: { newValue in
+                            if configurations[selectedModel] == nil {
+                                configurations[selectedModel] = VertexConfig()
+                            }
+                            configurations[selectedModel]?.email = newValue
+                        }
+                    ))
+                    .textFieldStyle(.roundedBorder)
+                }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Authentication:")
+                        .font(.subheadline)
+                        .padding(.top, 8)
+                    Text("Run in Terminal:")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Text("gcloud auth application-default login")
+                        .font(.system(.caption, design: .monospaced))
+                        .foregroundColor(.secondary)
+                        .padding(4)
+                        .background(Color.secondary.opacity(0.1))
+                        .cornerRadius(4)
+                }
+            }
+
+            if let error = errorMessage {
+                Text(error)
+                    .foregroundColor(.red)
+                    .font(.caption)
+            }
+
+            if showingSuccess {
+                Text("Settings saved successfully!")
+                    .foregroundColor(.green)
+                    .font(.caption)
+            }
+
+            HStack {
+                Spacer()
+                Button("Save") {
+                    saveSettings()
+                }
+                .keyboardShortcut(.defaultAction)
+            }
+        }
+        .onAppear {
+            loadConfigurations()
+        }
+    }
+
+    private func saveSettings() {
+        errorMessage = nil
+        showingSuccess = false
+
+        guard let config = configurations[selectedModel] else {
+            errorMessage = "No configuration found for selected model"
+            return
+        }
+
+        // Validate inputs
+        guard !config.projectID.isEmpty else {
+            errorMessage = "Project ID is required"
+            return
+        }
+
+        guard !config.email.isEmpty else {
+            errorMessage = "Email is required"
+            return
+        }
+
+        // Save configuration for this model
+        UserDefaults.standard.set(config.projectID, forKey: "vertexProjectID_\(selectedModel.rawValue)")
+        UserDefaults.standard.set(config.region, forKey: "vertexRegion_\(selectedModel.rawValue)")
+        UserDefaults.standard.set(config.email, forKey: "vertexEmail_\(selectedModel.rawValue)")
+
+        // Save the selected model as default
+        UserDefaults.standard.set(selectedModel.rawValue, forKey: "selectedAIModel")
+
+        showingSuccess = true
+
+        // Hide success message after 2 seconds
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            showingSuccess = false
+        }
+    }
+
+    private func loadConfigurations() {
+        // Load configurations for all models
+        for model in AIModel.allCases {
+            let projectID = UserDefaults.standard.string(forKey: "vertexProjectID_\(model.rawValue)") ?? ""
+            let region = UserDefaults.standard.string(forKey: "vertexRegion_\(model.rawValue)") ?? "us-central1"
+            let email = UserDefaults.standard.string(forKey: "vertexEmail_\(model.rawValue)") ?? ""
+
+            if !projectID.isEmpty || !email.isEmpty {
+                configurations[model] = VertexConfig(
+                    projectID: projectID,
+                    region: region,
+                    email: email
+                )
+            }
+        }
+
+        // Load default selected model
+        if let savedModel = UserDefaults.standard.string(forKey: "selectedAIModel"),
+           let model = AIModel.allCases.first(where: { $0.rawValue == savedModel }) {
+            selectedModel = model
         }
     }
 }

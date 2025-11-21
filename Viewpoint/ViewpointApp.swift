@@ -18,6 +18,17 @@ struct ViewpointApp: App {
         .windowResizability(.contentSize)
         .defaultPosition(.center)
 
+        // Indigo AI Assistant Window
+        Window("Indigo", id: "indigo") {
+            IndigoView(viewModel: IndigoViewModel(jiraService: jiraService))
+                .environmentObject(jiraService)
+                .frame(minWidth: 500, minHeight: 700)
+        }
+        .windowStyle(.hiddenTitleBar)
+        .windowResizability(.contentSize)
+        .defaultSize(width: 500, height: 700)
+        .defaultPosition(.center)
+
         Settings {
             SettingsView()
                 .onDisappear {

@@ -7,6 +7,15 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A6CBA4BA2ED0395200528322 /* WhisperService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6CBA4B92ED0395200528322 /* WhisperService.swift */; };
+		A6CBA4BB2ED0395200528322 /* AudioRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6CBA4B82ED0395200528322 /* AudioRecorder.swift */; };
+		A6CBA4BD2ED0395F00528322 /* IndigoModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6CBA4BC2ED0395F00528322 /* IndigoModels.swift */; };
+		A6CBA4C02ED0397500528322 /* IndigoViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6CBA4BE2ED0397500528322 /* IndigoViewModel.swift */; };
+		A6CBA4C32ED0398E00528322 /* IndigoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6CBA4C12ED0398E00528322 /* IndigoView.swift */; };
+		A6CBA4C42ED0398E00528322 /* VisualEffectView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6CBA4C22ED0398E00528322 /* VisualEffectView.swift */; };
+		A6CBA4C72ED039CE00528322 /* WhisperKit in Frameworks */ = {isa = PBXBuildFile; productRef = A6CBA4C62ED039CE00528322 /* WhisperKit */; };
+		A6CBA4CA2ED03EF400528322 /* VertexAIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6CBA4C92ED03EF400528322 /* VertexAIClient.swift */; };
+		A6CBA4CB2ED03EF400528322 /* AIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6CBA4C82ED03EF400528322 /* AIService.swift */; };
 		AA0001 /* ViewpointApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0001 /* ViewpointApp.swift */; };
 		AA0002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0002 /* ContentView.swift */; };
 		AA0003 /* JiraModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0003 /* JiraModels.swift */; };
@@ -21,6 +30,14 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		A6CBA4B82ED0395200528322 /* AudioRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioRecorder.swift; sourceTree = "<group>"; };
+		A6CBA4B92ED0395200528322 /* WhisperService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhisperService.swift; sourceTree = "<group>"; };
+		A6CBA4BC2ED0395F00528322 /* IndigoModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IndigoModels.swift; sourceTree = "<group>"; };
+		A6CBA4BE2ED0397500528322 /* IndigoViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IndigoViewModel.swift; sourceTree = "<group>"; };
+		A6CBA4C12ED0398E00528322 /* IndigoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IndigoView.swift; sourceTree = "<group>"; };
+		A6CBA4C22ED0398E00528322 /* VisualEffectView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VisualEffectView.swift; sourceTree = "<group>"; };
+		A6CBA4C82ED03EF400528322 /* AIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIService.swift; sourceTree = "<group>"; };
+		A6CBA4C92ED03EF400528322 /* VertexAIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VertexAIClient.swift; sourceTree = "<group>"; };
 		BB0001 /* ViewpointApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewpointApp.swift; sourceTree = "<group>"; };
 		BB0002 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		BB0003 /* JiraModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JiraModels.swift; sourceTree = "<group>"; };
@@ -42,12 +59,21 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A6CBA4C72ED039CE00528322 /* WhisperKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		A6CBA4BF2ED0397500528322 /* ViewModels */ = {
+			isa = PBXGroup;
+			children = (
+				A6CBA4BE2ED0397500528322 /* IndigoViewModel.swift */,
+			);
+			path = ViewModels;
+			sourceTree = "<group>";
+		};
 		EE0001 = {
 			isa = PBXGroup;
 			children = (
@@ -68,6 +94,7 @@
 				BB0010 /* Assets.xcassets */,
 				BB0008 /* Info.plist */,
 				BB0009 /* Viewpoint.entitlements */,
+				A6CBA4BF2ED0397500528322 /* ViewModels */,
 			);
 			path = Viewpoint;
 			sourceTree = "<group>";
@@ -76,6 +103,7 @@
 			isa = PBXGroup;
 			children = (
 				BB0003 /* JiraModels.swift */,
+				A6CBA4BC2ED0395F00528322 /* IndigoModels.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -85,6 +113,10 @@
 			children = (
 				BB0004 /* JiraService.swift */,
 				BB0013 /* Logger.swift */,
+				A6CBA4B82ED0395200528322 /* AudioRecorder.swift */,
+				A6CBA4B92ED0395200528322 /* WhisperService.swift */,
+				A6CBA4C82ED03EF400528322 /* AIService.swift */,
+				A6CBA4C92ED03EF400528322 /* VertexAIClient.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -96,6 +128,8 @@
 				BB0006 /* SprintInfoView.swift */,
 				BB0011 /* PersistentSplitView.swift */,
 				BB0012 /* SettingsView.swift */,
+				A6CBA4C12ED0398E00528322 /* IndigoView.swift */,
+				A6CBA4C22ED0398E00528322 /* VisualEffectView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -160,6 +194,9 @@
 				Base,
 			);
 			mainGroup = EE0001;
+			packageReferences = (
+				A6CBA4C52ED039CE00528322 /* XCRemoteSwiftPackageReference "WhisperKit" */,
+			);
 			productRefGroup = GG0001 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -188,13 +225,21 @@
 				AA0001 /* ViewpointApp.swift in Sources */,
 				AA0002 /* ContentView.swift in Sources */,
 				AA0003 /* JiraModels.swift in Sources */,
+				A6CBA4BD2ED0395F00528322 /* IndigoModels.swift in Sources */,
 				AA0004 /* JiraService.swift in Sources */,
 				AA0005 /* FilterPanel.swift in Sources */,
+				A6CBA4C02ED0397500528322 /* IndigoViewModel.swift in Sources */,
 				AA0006 /* SprintInfoView.swift in Sources */,
+				A6CBA4C32ED0398E00528322 /* IndigoView.swift in Sources */,
+				A6CBA4C42ED0398E00528322 /* VisualEffectView.swift in Sources */,
 				AA0007 /* Configuration.swift in Sources */,
 				AA0009 /* PersistentSplitView.swift in Sources */,
 				AA0010 /* SettingsView.swift in Sources */,
 				AA0011 /* Logger.swift in Sources */,
+				A6CBA4BA2ED0395200528322 /* WhisperService.swift in Sources */,
+				A6CBA4CA2ED03EF400528322 /* VertexAIClient.swift in Sources */,
+				A6CBA4CB2ED03EF400528322 /* AIService.swift in Sources */,
+				A6CBA4BB2ED0395200528322 /* AudioRecorder.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -338,8 +383,17 @@
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_INCOMING_NETWORK_CONNECTIONS = NO;
 				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
 				ENABLE_PREVIEWS = YES;
+				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = YES;
+				ENABLE_RESOURCE_ACCESS_BLUETOOTH = NO;
+				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
+				ENABLE_RESOURCE_ACCESS_CAMERA = NO;
+				ENABLE_RESOURCE_ACCESS_CONTACTS = NO;
+				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
+				ENABLE_RESOURCE_ACCESS_PRINTING = NO;
+				ENABLE_RESOURCE_ACCESS_USB = NO;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Viewpoint/Info.plist;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
@@ -371,8 +425,17 @@
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_INCOMING_NETWORK_CONNECTIONS = NO;
 				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
 				ENABLE_PREVIEWS = YES;
+				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = YES;
+				ENABLE_RESOURCE_ACCESS_BLUETOOTH = NO;
+				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
+				ENABLE_RESOURCE_ACCESS_CAMERA = NO;
+				ENABLE_RESOURCE_ACCESS_CONTACTS = NO;
+				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
+				ENABLE_RESOURCE_ACCESS_PRINTING = NO;
+				ENABLE_RESOURCE_ACCESS_USB = NO;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Viewpoint/Info.plist;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
@@ -413,6 +476,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		A6CBA4C52ED039CE00528322 /* XCRemoteSwiftPackageReference "WhisperKit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/argmaxinc/WhisperKit";
+			requirement = {
+				branch = main;
+				kind = branch;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		A6CBA4C62ED039CE00528322 /* WhisperKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A6CBA4C52ED039CE00528322 /* XCRemoteSwiftPackageReference "WhisperKit" */;
+			productName = WhisperKit;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = JJ0001 /* Project object */;
 }

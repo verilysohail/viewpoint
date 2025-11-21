@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject var jiraService: JiraService
+    @Environment(\.openWindow) private var openWindow
     @State private var selectedIssue: JiraIssue?
     @AppStorage("showFilters") private var showFilters: Bool = true
     @AppStorage("sortOption") private var sortOptionRaw: String = "dateCreated"
@@ -274,6 +275,25 @@ struct ContentView: View {
                 .keyboardShortcut("l", modifiers: .command)
                 .help("Log work for selected issue (⌘L)")
                 .disabled(selectedIssue == nil)
+            }
+
+            ToolbarItem(id: "launchIndigo", placement: .automatic, showsByDefault: true) {
+                // Launch Indigo AI Assistant
+                Button(action: {
+                    openWindow(id: "indigo")
+                }) {
+                    Label("Launch Indigo", systemImage: "waveform.circle.fill")
+                        .symbolRenderingMode(.palette)
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [Color(red: 0.31, green: 0.27, blue: 0.90), Color(red: 0.46, green: 0.39, blue: 1.0)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                }
+                .keyboardShortcut("i", modifiers: .command)
+                .help("Launch Indigo AI Assistant (⌘I)")
             }
 
             ToolbarItem(id: "controls", placement: .automatic, showsByDefault: true) {

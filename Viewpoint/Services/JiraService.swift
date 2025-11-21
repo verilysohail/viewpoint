@@ -208,6 +208,79 @@ class JiraService: ObservableObject {
         }
     }
 
+    func searchWithJQL(_ jql: String) async {
+        // Reset pagination state when executing new search
+        await MainActor.run {
+            isLoading = true
+            currentStartAt = 0
+            issues = []
+        }
+
+        let maxResults = initialLoadCount
+        var allIssues: [JiraIssue] = []
+
+        do {
+            Logger.shared.info("Executing JQL search: \(jql)")
+
+            // Build URL with query parameters
+            var components = URLComponents(string: "\(config.jiraBaseURL)/rest/api/3/search/jql")!
+            components.queryItems = [
+                URLQueryItem(name: "jql", value: jql),
+                URLQueryItem(name: "startAt", value: "0"),
+                URLQueryItem(name: "maxResults", value: String(maxResults)),
+                URLQueryItem(name: "fields", value: "summary,status,assignee,issuetype,project,priority,created,updated,customfield_10014,customfield_10016,customfield_10020,timeoriginalestimate,timespent,timeestimate")
+            ]
+
+            guard let url = components.url else {
+                await MainActor.run {
+                    errorMessage = "Invalid URL"
+                    isLoading = false
+                }
+                return
+            }
+
+            Logger.shared.info("Fetching from: \(url)")
+
+            let request = createRequest(url: url)
+            let (data, response) = try await URLSession.shared.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw URLError(.badServerResponse)
+            }
+
+            Logger.shared.info("JQL search response status: \(httpResponse.statusCode)")
+
+            guard httpResponse.statusCode == 200 else {
+                throw URLError(.init(rawValue: httpResponse.statusCode))
+            }
+
+            let searchResponse = try JSONDecoder().decode(JiraSearchResponse.self, from: data)
+            allIssues = searchResponse.issues
+
+            Logger.shared.info("JQL search returned \(allIssues.count) issues")
+
+            await MainActor.run {
+                self.issues = allIssues
+                self.totalIssuesAvailable = allIssues.count
+                self.hasMoreIssues = false
+                self.currentStartAt = allIssues.count
+                self.updateAvailableFilters()
+                self.isLoading = false
+                self.errorMessage = nil
+            }
+
+            // Fetch epic summaries
+            await fetchEpicSummaries()
+
+        } catch {
+            Logger.shared.error("Error executing JQL search: \(error)")
+            await MainActor.run {
+                self.errorMessage = "JQL search failed: \(error.localizedDescription)"
+                self.isLoading = false
+            }
+        }
+    }
+
     func fetchSprints() async {
         let urlString = "\(config.jiraBaseURL)/rest/agile/1.0/board"
 
@@ -568,6 +641,409 @@ class JiraService: ObservableObject {
         } catch {
             Logger.shared.error("Failed to log work: \(error)")
             return false
+        }
+    }
+
+    func updateIssue(issueKey: String, fields: [String: Any]) async -> Bool {
+        let urlString = "\(config.jiraBaseURL)/rest/api/3/issue/\(issueKey)"
+
+        guard let url = URL(string: urlString) else {
+            Logger.shared.error("Invalid URL for updating issue")
+            return false
+        }
+
+        var request = createRequest(url: url)
+        request.httpMethod = "PUT"
+
+        // Map AI fields to Jira API format
+        var jiraFields: [String: Any] = [:]
+
+        // Handle different field types
+        for (key, value) in fields {
+            switch key.lowercased() {
+            case "summary":
+                jiraFields["summary"] = value
+
+            case "description":
+                jiraFields["description"] = value
+
+            case "assignee":
+                if let assigneeEmail = value as? String {
+                    jiraFields["assignee"] = ["emailAddress": assigneeEmail]
+                }
+
+            case "priority":
+                if let priority = value as? String {
+                    jiraFields["priority"] = ["name": priority]
+                }
+
+            case "labels":
+                if let labels = value as? [String] {
+                    jiraFields["labels"] = labels
+                } else if let labelString = value as? String {
+                    jiraFields["labels"] = labelString.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+                }
+
+            case "components":
+                if let components = value as? [String] {
+                    jiraFields["components"] = components.map { ["name": $0] }
+                } else if let componentString = value as? String {
+                    let componentNames = componentString.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+                    jiraFields["components"] = componentNames.map { ["name": $0] }
+                }
+
+            case "originalestimate", "timetracking.originalestimate":
+                if let estimate = value as? String {
+                    jiraFields["timetracking"] = ["originalEstimate": estimate]
+                }
+
+            case "remainingestimate", "timetracking.remainingestimate":
+                if let estimate = value as? String {
+                    var timetracking = jiraFields["timetracking"] as? [String: String] ?? [:]
+                    timetracking["remainingEstimate"] = estimate
+                    jiraFields["timetracking"] = timetracking
+                }
+
+            case "sprint":
+                if let sprintValue = value as? String {
+                    if sprintValue.lowercased() == "current" {
+                        let activeSprints = await MainActor.run {
+                            self.availableSprints.filter { $0.state.lowercased() == "active" }
+                        }
+                        if let currentSprint = activeSprints.first {
+                            jiraFields["customfield_10020"] = [currentSprint.id]
+                        }
+                    }
+                }
+
+            case "epic":
+                if let epic = value as? String {
+                    jiraFields["customfield_10014"] = epic
+                }
+
+            default:
+                Logger.shared.warning("Unknown field: \(key)")
+            }
+        }
+
+        let requestBody: [String: Any] = ["fields": jiraFields]
+
+        do {
+            request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
+
+            Logger.shared.info("Updating issue \(issueKey) with fields: \(jiraFields)")
+
+            let (data, response) = try await URLSession.shared.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw URLError(.badServerResponse)
+            }
+
+            Logger.shared.info("Update issue response status: \(httpResponse.statusCode)")
+
+            if httpResponse.statusCode == 204 || httpResponse.statusCode == 200 {
+                Logger.shared.info("Successfully updated issue: \(issueKey)")
+                await fetchMyIssues()
+                return true
+            } else {
+                if let errorMessage = String(data: data, encoding: .utf8) {
+                    Logger.shared.error("Error updating issue: \(errorMessage)")
+                }
+                return false
+            }
+        } catch {
+            Logger.shared.error("Failed to update issue: \(error)")
+            return false
+        }
+    }
+
+    func addComment(issueKey: String, comment: String) async -> Bool {
+        let urlString = "\(config.jiraBaseURL)/rest/api/3/issue/\(issueKey)/comment"
+
+        guard let url = URL(string: urlString) else {
+            Logger.shared.error("Invalid URL for adding comment")
+            return false
+        }
+
+        var request = createRequest(url: url)
+        request.httpMethod = "POST"
+
+        let requestBody: [String: Any] = [
+            "body": [
+                "type": "doc",
+                "version": 1,
+                "content": [
+                    [
+                        "type": "paragraph",
+                        "content": [
+                            [
+                                "type": "text",
+                                "text": comment
+                            ]
+                        ]
+                    ]
+                ]
+            ]
+        ]
+
+        do {
+            request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
+
+            Logger.shared.info("Adding comment to \(issueKey)")
+
+            let (data, response) = try await URLSession.shared.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw URLError(.badServerResponse)
+            }
+
+            Logger.shared.info("Add comment response status: \(httpResponse.statusCode)")
+
+            if httpResponse.statusCode == 201 || httpResponse.statusCode == 200 {
+                Logger.shared.info("Successfully added comment to \(issueKey)")
+                return true
+            } else {
+                if let errorMessage = String(data: data, encoding: .utf8) {
+                    Logger.shared.error("Error adding comment: \(errorMessage)")
+                }
+                return false
+            }
+        } catch {
+            Logger.shared.error("Failed to add comment: \(error)")
+            return false
+        }
+    }
+
+    func deleteIssue(issueKey: String) async -> Bool {
+        let urlString = "\(config.jiraBaseURL)/rest/api/3/issue/\(issueKey)"
+
+        guard let url = URL(string: urlString) else {
+            Logger.shared.error("Invalid URL for deleting issue")
+            return false
+        }
+
+        var request = createRequest(url: url)
+        request.httpMethod = "DELETE"
+
+        do {
+            Logger.shared.info("Deleting issue \(issueKey)")
+
+            let (data, response) = try await URLSession.shared.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw URLError(.badServerResponse)
+            }
+
+            Logger.shared.info("Delete issue response status: \(httpResponse.statusCode)")
+
+            if httpResponse.statusCode == 204 || httpResponse.statusCode == 200 {
+                Logger.shared.info("Successfully deleted issue \(issueKey)")
+                await fetchMyIssues()
+                return true
+            } else {
+                if let errorMessage = String(data: data, encoding: .utf8) {
+                    Logger.shared.error("Error deleting issue: \(errorMessage)")
+                }
+                return false
+            }
+        } catch {
+            Logger.shared.error("Failed to delete issue: \(error)")
+            return false
+        }
+    }
+
+    func assignIssue(issueKey: String, assigneeEmail: String) async -> Bool {
+        return await updateIssue(issueKey: issueKey, fields: ["assignee": assigneeEmail])
+    }
+
+    func addWatcher(issueKey: String, watcherEmail: String) async -> Bool {
+        let urlString = "\(config.jiraBaseURL)/rest/api/3/issue/\(issueKey)/watchers"
+
+        guard let url = URL(string: urlString) else {
+            Logger.shared.error("Invalid URL for adding watcher")
+            return false
+        }
+
+        var request = createRequest(url: url)
+        request.httpMethod = "POST"
+        request.httpBody = "\"\(watcherEmail)\"".data(using: .utf8)
+
+        do {
+            Logger.shared.info("Adding watcher to \(issueKey): \(watcherEmail)")
+
+            let (data, response) = try await URLSession.shared.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw URLError(.badServerResponse)
+            }
+
+            Logger.shared.info("Add watcher response status: \(httpResponse.statusCode)")
+
+            if httpResponse.statusCode == 204 || httpResponse.statusCode == 200 {
+                Logger.shared.info("Successfully added watcher to \(issueKey)")
+                return true
+            } else {
+                if let errorMessage = String(data: data, encoding: .utf8) {
+                    Logger.shared.error("Error adding watcher: \(errorMessage)")
+                }
+                return false
+            }
+        } catch {
+            Logger.shared.error("Failed to add watcher: \(error)")
+            return false
+        }
+    }
+
+    func linkIssues(issueKey: String, linkedIssueKey: String, linkType: String) async -> Bool {
+        let urlString = "\(config.jiraBaseURL)/rest/api/3/issueLink"
+
+        guard let url = URL(string: urlString) else {
+            Logger.shared.error("Invalid URL for linking issues")
+            return false
+        }
+
+        var request = createRequest(url: url)
+        request.httpMethod = "POST"
+
+        let requestBody: [String: Any] = [
+            "type": ["name": linkType],
+            "inwardIssue": ["key": issueKey],
+            "outwardIssue": ["key": linkedIssueKey]
+        ]
+
+        do {
+            request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
+
+            Logger.shared.info("Linking \(issueKey) to \(linkedIssueKey) with type \(linkType)")
+
+            let (data, response) = try await URLSession.shared.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw URLError(.badServerResponse)
+            }
+
+            Logger.shared.info("Link issues response status: \(httpResponse.statusCode)")
+
+            if httpResponse.statusCode == 201 || httpResponse.statusCode == 200 {
+                Logger.shared.info("Successfully linked issues")
+                return true
+            } else {
+                if let errorMessage = String(data: data, encoding: .utf8) {
+                    Logger.shared.error("Error linking issues: \(errorMessage)")
+                }
+                return false
+            }
+        } catch {
+            Logger.shared.error("Failed to link issues: \(error)")
+            return false
+        }
+    }
+
+    func createIssue(fields: [String: Any]) async -> (success: Bool, issueKey: String?) {
+        let urlString = "\(config.jiraBaseURL)/rest/api/3/issue"
+
+        guard let url = URL(string: urlString) else {
+            Logger.shared.error("Invalid URL for creating issue")
+            return (false, nil)
+        }
+
+        var request = createRequest(url: url)
+        request.httpMethod = "POST"
+
+        // Map AI fields to Jira API format
+        var jiraFields: [String: Any] = [:]
+
+        // Required: Project
+        if let projectKey = fields["project"] as? String {
+            jiraFields["project"] = ["key": projectKey]
+        } else {
+            Logger.shared.error("Missing required field: project")
+            return (false, nil)
+        }
+
+        // Required: Summary
+        if let summary = fields["summary"] as? String {
+            jiraFields["summary"] = summary
+        } else {
+            Logger.shared.error("Missing required field: summary")
+            return (false, nil)
+        }
+
+        // Required: Issue Type
+        if let issueType = fields["type"] as? String {
+            jiraFields["issuetype"] = ["name": issueType]
+        } else {
+            // Default to Story if not specified
+            jiraFields["issuetype"] = ["name": "Story"]
+        }
+
+        // Optional: Assignee (use email or accountId)
+        if let assignee = fields["assignee"] as? String {
+            // Try to use email first, fallback to accountId
+            jiraFields["assignee"] = ["emailAddress": assignee]
+        }
+
+        // Optional: Original Estimate
+        if let estimateStr = fields["originalEstimate"] as? String {
+            // Convert "1.5h" or "1h 30m" to Jira format
+            jiraFields["timetracking"] = ["originalEstimate": estimateStr]
+        }
+
+        // Optional: Sprint (needs sprint ID)
+        if let sprintValue = fields["sprint"] as? String {
+            if sprintValue.lowercased() == "current" {
+                // Find the currently active sprint
+                let activeSprints = await MainActor.run {
+                    self.availableSprints.filter { $0.state.lowercased() == "active" }
+                }
+                if let currentSprint = activeSprints.first {
+                    jiraFields["customfield_10020"] = [currentSprint.id]
+                    Logger.shared.info("Using current sprint: \(currentSprint.name) (ID: \(currentSprint.id))")
+                }
+            }
+        }
+
+        // Optional: Epic (needs epic key - for now just log it)
+        if let epic = fields["epic"] as? String {
+            Logger.shared.info("Epic specified: \(epic) - will need to set after creation")
+            // Note: Epic link is typically customfield_10014, but it varies by Jira instance
+            // For now, we'll log it and potentially set it in a follow-up update
+        }
+
+        let requestBody: [String: Any] = ["fields": jiraFields]
+
+        do {
+            request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
+
+            Logger.shared.info("Creating issue with fields: \(jiraFields)")
+
+            let (data, response) = try await URLSession.shared.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw URLError(.badServerResponse)
+            }
+
+            Logger.shared.info("Create issue response status: \(httpResponse.statusCode)")
+
+            if httpResponse.statusCode == 201 {
+                // Parse response to get the new issue key
+                if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let issueKey = json["key"] as? String {
+                    Logger.shared.info("Successfully created issue: \(issueKey)")
+                    // Refresh issues to show the new issue
+                    await fetchMyIssues()
+                    return (true, issueKey)
+                }
+                return (true, nil)
+            } else {
+                if let errorMessage = String(data: data, encoding: .utf8) {
+                    Logger.shared.error("Error creating issue: \(errorMessage)")
+                }
+                return (false, nil)
+            }
+        } catch {
+            Logger.shared.error("Failed to create issue: \(error)")
+            return (false, nil)
         }
     }
 }

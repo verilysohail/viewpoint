@@ -28,5 +28,9 @@
 	<string>NSApplication</string>
 	<key>NSMainStoryboardFile</key>
 	<string></string>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.productivity</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Viewpoint needs access to your microphone for voice commands to Indigo AI Assistant.</string>
 </dict>
 </plist>

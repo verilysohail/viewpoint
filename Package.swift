@@ -12,9 +12,15 @@ let package = Package(
             targets: ["Viewpoint"]
         )
     ],
+    dependencies: [
+        .package(url: "https://github.com/argmaxinc/WhisperKit", branch: "main")
+    ],
     targets: [
         .executableTarget(
             name: "Viewpoint",
+            dependencies: [
+                .product(name: "WhisperKit", package: "WhisperKit")
+            ],
             path: "Viewpoint",
             resources: [
                 .process("Assets.xcassets")
