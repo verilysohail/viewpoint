@@ -13,6 +13,7 @@ struct ContentView: View {
     @AppStorage("colorScheme") private var colorSchemePreference: String = "auto"
     @State private var searchText: String = ""
     @FocusState private var isSearchFocused: Bool
+    @State private var expandedSections: Set<String> = []
 
     private var sortOption: SortOption {
         SortOption.allCases.first { $0.rawValue == sortOptionRaw } ?? .dateCreated
@@ -140,7 +141,7 @@ struct ContentView: View {
                         }
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                     } else {
-                        IssueListView(selectedIssue: $selectedIssue, groupedIssues: groupedIssues)
+                        IssueListView(selectedIssue: $selectedIssue, groupedIssues: groupedIssues, expandedSections: $expandedSections)
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -170,6 +171,27 @@ struct ContentView: View {
                 .keyboardShortcut("l", modifiers: .command)
                 .help("Log work for selected issue (⌘L)")
                 .disabled(selectedIssue == nil)
+            }
+
+            // Collapse/Expand all buttons (only show when grouping is active)
+            ToolbarItem(id: "groupControls", placement: .automatic, showsByDefault: true) {
+                HStack(spacing: 4) {
+                    if groupedIssues.count > 1 {
+                        Button(action: {
+                            expandedSections = Set(groupedIssues.map { $0.0 })
+                        }) {
+                            Image(systemName: "chevron.down.square")
+                        }
+                        .help("Expand all groups")
+
+                        Button(action: {
+                            expandedSections.removeAll()
+                        }) {
+                            Image(systemName: "chevron.up.square")
+                        }
+                        .help("Collapse all groups")
+                    }
+                }
             }
 
             ToolbarItem(id: "controls", placement: .automatic, showsByDefault: true) {
@@ -327,29 +349,27 @@ struct ContentView: View {
                 .help("Focus search (⌘F)")
             }
 
-            // Flexible space items for customization
-            ToolbarItem(id: "flexibleSpace1", placement: .automatic, showsByDefault: false) {
+            // Flexible space for customization
+            ToolbarItem(id: "flexibleSpace", placement: .automatic, showsByDefault: false) {
                 Spacer()
             }
 
-            ToolbarItem(id: "flexibleSpace2", placement: .automatic, showsByDefault: false) {
+            // Fixed-width spacers for customization (small)
+            ToolbarItem(id: "fixedSpace10", placement: .automatic, showsByDefault: false) {
                 Spacer()
+                    .frame(width: 10)
             }
 
-            // Fixed space items for customization
-            ToolbarItem(id: "fixedSpace1", placement: .automatic, showsByDefault: false) {
+            // Fixed-width spacers for customization (medium)
+            ToolbarItem(id: "fixedSpace20", placement: .automatic, showsByDefault: false) {
                 Spacer()
                     .frame(width: 20)
             }
 
-            ToolbarItem(id: "fixedSpace2", placement: .automatic, showsByDefault: false) {
+            // Fixed-width spacers for customization (large)
+            ToolbarItem(id: "fixedSpace40", placement: .automatic, showsByDefault: false) {
                 Spacer()
-                    .frame(width: 20)
-            }
-
-            ToolbarItem(id: "fixedSpace3", placement: .automatic, showsByDefault: false) {
-                Spacer()
-                    .frame(width: 20)
+                    .frame(width: 40)
             }
         }
         .environment(\.textSizeMultiplier, textSize)
@@ -393,16 +413,40 @@ struct HeaderView: View {
 struct IssueListView: View {
     @Binding var selectedIssue: JiraIssue?
     let groupedIssues: [(String, [JiraIssue])]
+    @Binding var expandedSections: Set<String>
 
     var body: some View {
         List(selection: $selectedIssue) {
             ForEach(groupedIssues, id: \.0) { groupName, issues in
                 if groupedIssues.count > 1 {
-                    Section(header: Text(groupName).font(.headline)) {
+                    DisclosureGroup(
+                        isExpanded: Binding(
+                            get: { expandedSections.contains(groupName) },
+                            set: { isExpanded in
+                                if isExpanded {
+                                    expandedSections.insert(groupName)
+                                } else {
+                                    expandedSections.remove(groupName)
+                                }
+                            }
+                        )
+                    ) {
                         ForEach(issues) { issue in
                             IssueRow(issue: issue)
                                 .tag(issue)
                         }
+                    } label: {
+                        HStack {
+                            Text(groupName)
+                                .font(.headline)
+                                .textCase(.uppercase)
+                                .foregroundColor(Color(red: 0.0, green: 0.4, blue: 0.2))
+                            Spacer()
+                        }
+                        .padding(.vertical, 6)
+                        .padding(.horizontal, 8)
+                        .background(Color(NSColor.controlBackgroundColor))
+                        .cornerRadius(4)
                     }
                 } else {
                     ForEach(issues) { issue in
@@ -413,6 +457,12 @@ struct IssueListView: View {
             }
         }
         .listStyle(.inset)
+        .onAppear {
+            // Expand all sections by default on first appearance
+            if expandedSections.isEmpty {
+                expandedSections = Set(groupedIssues.map { $0.0 })
+            }
+        }
     }
 }
 
