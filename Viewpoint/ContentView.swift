@@ -14,6 +14,21 @@ struct ContentView: View {
     @State private var searchText: String = ""
     @FocusState private var isSearchFocused: Bool
     @AppStorage("expandedSectionsRaw") private var expandedSectionsRaw: String = ""
+    @AppStorage("clientCreatedFilter") private var clientCreatedFilterRaw: String = "all"
+    @AppStorage("clientTypeFilter") private var clientTypeFilterRaw: String = "all"
+    @AppStorage("clientStatusFilter") private var clientStatusFilterRaw: String = "all"
+
+    private var clientCreatedFilter: CreatedFilter {
+        CreatedFilter(rawValue: clientCreatedFilterRaw) ?? .all
+    }
+
+    private var clientTypeFilter: String {
+        clientTypeFilterRaw
+    }
+
+    private var clientStatusFilter: String {
+        clientStatusFilterRaw
+    }
 
     private var expandedSections: Binding<Set<String>> {
         Binding(
@@ -48,15 +63,37 @@ struct ContentView: View {
     }
 
     var filteredIssues: [JiraIssue] {
-        if searchText.isEmpty {
-            return jiraService.issues
+        var issues = jiraService.issues
+
+        // Apply search filter
+        if !searchText.isEmpty {
+            let lowercasedSearch = searchText.lowercased()
+            issues = issues.filter { issue in
+                issue.key.lowercased().contains(lowercasedSearch) ||
+                issue.summary.lowercased().contains(lowercasedSearch)
+            }
         }
 
-        let lowercasedSearch = searchText.lowercased()
-        return jiraService.issues.filter { issue in
-            issue.key.lowercased().contains(lowercasedSearch) ||
-            issue.summary.lowercased().contains(lowercasedSearch)
+        // Apply client-side created date filter
+        if clientCreatedFilter != .all {
+            let cutoffDate = clientCreatedFilter.cutoffDate
+            issues = issues.filter { issue in
+                guard let created = issue.created else { return false }
+                return created >= cutoffDate
+            }
         }
+
+        // Apply client-side type filter
+        if clientTypeFilter != "all" {
+            issues = issues.filter { $0.issueType == clientTypeFilter }
+        }
+
+        // Apply client-side status filter
+        if clientStatusFilter != "all" {
+            issues = issues.filter { $0.status == clientStatusFilter }
+        }
+
+        return issues
     }
 
     var sortedIssues: [JiraIssue] {
@@ -83,6 +120,12 @@ struct ContentView: View {
                 return ascending ? epic1 < epic2 : epic1 > epic2
             }
         }
+
+        // Debug logging
+        if !sorted.isEmpty {
+            Logger.shared.info("Sorted \(sorted.count) issues by \(sortOption.rawValue) \(sortDirection == .ascending ? "ascending" : "descending"), first: \(sorted.first?.key ?? "none"), last: \(sorted.last?.key ?? "none")")
+        }
+
         return sorted
     }
 
@@ -113,7 +156,33 @@ struct ContentView: View {
             }
         }
 
-        return grouped.sorted { $0.key < $1.key }
+        // Sort groups by name, and sort issues within each group
+        return grouped.sorted { $0.key < $1.key }.map { (key, issues) in
+            let sortedGroupIssues = issues.sorted { issue1, issue2 in
+                let ascending = sortDirection == .ascending
+                switch sortOption {
+                case .status:
+                    return ascending ? issue1.status < issue2.status : issue1.status > issue2.status
+                case .dateCreated:
+                    let date1 = issue1.created ?? Date.distantPast
+                    let date2 = issue2.created ?? Date.distantPast
+                    return ascending ? date1 < date2 : date1 > date2
+                case .dateUpdated:
+                    let date1 = issue1.updated ?? Date.distantPast
+                    let date2 = issue2.updated ?? Date.distantPast
+                    return ascending ? date1 < date2 : date1 > date2
+                case .assignee:
+                    let assignee1 = issue1.assignee ?? ""
+                    let assignee2 = issue2.assignee ?? ""
+                    return ascending ? assignee1 < assignee2 : assignee1 > assignee2
+                case .epic:
+                    let epic1 = issue1.epic ?? ""
+                    let epic2 = issue2.epic ?? ""
+                    return ascending ? epic1 < epic2 : epic1 > epic2
+                }
+            }
+            return (key, sortedGroupIssues)
+        }
     }
 
     var issueContentView: some View {
@@ -126,10 +195,17 @@ struct ContentView: View {
                 sortDirection: sortDirection,
                 groupOption: groupOption,
                 groupedIssues: groupedIssues,
+                totalIssueCount: groupedIssues.reduce(0) { $0 + $1.1.count },
                 expandedSections: expandedSections,
                 onSortOptionChange: { sortOptionRaw = $0.rawValue },
                 onSortDirectionChange: { sortDirectionRaw = $0 == .ascending ? "ascending" : "descending" },
-                onGroupOptionChange: { groupOptionRaw = $0.rawValue }
+                onGroupOptionChange: { groupOptionRaw = $0.rawValue },
+                clientCreatedFilter: clientCreatedFilter,
+                onCreatedFilterChange: { clientCreatedFilterRaw = $0.rawValue },
+                clientTypeFilter: clientTypeFilter,
+                onTypeFilterChange: { clientTypeFilterRaw = $0 },
+                clientStatusFilter: clientStatusFilter,
+                onStatusFilterChange: { clientStatusFilterRaw = $0 }
             )
 
             // Issue list content
@@ -170,6 +246,9 @@ struct ContentView: View {
             } else {
                 issueContentView
             }
+
+            // Status bar at the bottom
+            StatusBarView()
         }
         .sheet(isPresented: $showingLogWorkForSelected) {
             if let issue = selectedIssue {
@@ -901,10 +980,28 @@ struct IssueListToolbar: View {
     let sortDirection: SortDirection
     let groupOption: GroupOption
     let groupedIssues: [(String, [JiraIssue])]
+    let totalIssueCount: Int
     @Binding var expandedSections: Set<String>
     let onSortOptionChange: (SortOption) -> Void
     let onSortDirectionChange: (SortDirection) -> Void
     let onGroupOptionChange: (GroupOption) -> Void
+    let clientCreatedFilter: CreatedFilter
+    let onCreatedFilterChange: (CreatedFilter) -> Void
+    let clientTypeFilter: String
+    let onTypeFilterChange: (String) -> Void
+    let clientStatusFilter: String
+    let onStatusFilterChange: (String) -> Void
+    @EnvironmentObject var jiraService: JiraService
+
+    private var availableTypes: [String] {
+        let types = Set(jiraService.issues.map { $0.issueType }).sorted()
+        return ["all"] + types
+    }
+
+    private var availableStatuses: [String] {
+        let statuses = Set(jiraService.issues.map { $0.status }).sorted()
+        return ["all"] + statuses
+    }
 
     var body: some View {
         HStack(spacing: 12) {
@@ -986,7 +1083,83 @@ struct IssueListToolbar: View {
             .help("Sort issues")
             .fixedSize()
 
+            Divider()
+                .frame(height: 20)
+
+            // Client-side filters
+            // Created date filter
+            Menu {
+                ForEach(CreatedFilter.allCases) { filter in
+                    Button(action: { onCreatedFilterChange(filter) }) {
+                        HStack {
+                            Text(filter.rawValue)
+                            if clientCreatedFilter == filter {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+                }
+            } label: {
+                Label(clientCreatedFilter == .all ? "Created" : clientCreatedFilter.rawValue, systemImage: "calendar")
+            }
+            .help("Filter by creation date")
+            .fixedSize()
+
+            // Type filter
+            Menu {
+                ForEach(availableTypes, id: \.self) { type in
+                    Button(action: { onTypeFilterChange(type) }) {
+                        HStack {
+                            Text(type == "all" ? "All" : type)
+                            if clientTypeFilter == type {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+                }
+            } label: {
+                Label(clientTypeFilter == "all" ? "Type" : clientTypeFilter, systemImage: "doc.text")
+            }
+            .help("Filter by issue type")
+            .fixedSize()
+
+            // Status filter
+            Menu {
+                ForEach(availableStatuses, id: \.self) { status in
+                    Button(action: { onStatusFilterChange(status) }) {
+                        HStack {
+                            Text(status == "all" ? "All" : status)
+                            if clientStatusFilter == status {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+                }
+            } label: {
+                Label(clientStatusFilter == "all" ? "Status" : clientStatusFilter, systemImage: "checkmark.circle")
+            }
+            .help("Filter by status")
+            .fixedSize()
+
             Spacer()
+
+            // Issue count and load more
+            HStack(spacing: 8) {
+                Text("\(totalIssueCount) of \(jiraService.totalIssuesAvailable) \(jiraService.totalIssuesAvailable == 1 ? "issue" : "issues")")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+
+                if jiraService.hasMoreIssues {
+                    Button("Get more...") {
+                        Task {
+                            await jiraService.loadMoreIssues()
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .font(.subheadline)
+                    .foregroundColor(.blue)
+                }
+            }
 
             // Search field
             HStack(spacing: 8) {
@@ -994,6 +1167,7 @@ struct IssueListToolbar: View {
                     .foregroundColor(.secondary)
                 TextField("Search issues...", text: $searchText)
                     .textFieldStyle(.plain)
+                    .frame(width: 200)
                     .focused($isSearchFocused)
                 if !searchText.isEmpty {
                     Button(action: { searchText = "" }) {
@@ -1020,6 +1194,91 @@ struct IssueListToolbar: View {
                 }
                 return event
             }
+        }
+    }
+}
+
+// MARK: - Status Bar
+
+struct StatusBarView: View {
+    @EnvironmentObject var jiraService: JiraService
+
+    var body: some View {
+        HStack(spacing: 12) {
+            if jiraService.isLoading {
+                HStack(spacing: 6) {
+                    ProgressView()
+                        .scaleEffect(0.7)
+                        .frame(width: 16, height: 16)
+                    Text("Loading issues...")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            } else {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundColor(.green)
+                    .font(.caption)
+                Text("Ready")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+
+            Spacer()
+
+            // Show current filter status
+            if !jiraService.filters.projects.isEmpty ||
+               !jiraService.filters.statuses.isEmpty ||
+               !jiraService.filters.assignees.isEmpty ||
+               !jiraService.filters.issueTypes.isEmpty ||
+               !jiraService.filters.epics.isEmpty ||
+               !jiraService.filters.sprints.isEmpty {
+                HStack(spacing: 4) {
+                    Image(systemName: "line.3.horizontal.decrease.circle")
+                        .font(.caption)
+                        .foregroundColor(.blue)
+                    Text("Filters active")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(Color(NSColor.controlBackgroundColor))
+        .overlay(
+            Rectangle()
+                .frame(height: 1)
+                .foregroundColor(Color(NSColor.separatorColor)),
+            alignment: .top
+        )
+    }
+}
+
+// MARK: - Client-Side Filters
+
+enum CreatedFilter: String, CaseIterable, Identifiable {
+    case all = "All"
+    case last24Hours = "Last 24 hours"
+    case lastWeek = "Last week"
+    case lastMonth = "Last month"
+    case lastSixMonths = "Last 6 months"
+
+    var id: String { rawValue }
+
+    var cutoffDate: Date {
+        let calendar = Calendar.current
+        let now = Date()
+        switch self {
+        case .all:
+            return Date.distantPast
+        case .last24Hours:
+            return calendar.date(byAdding: .hour, value: -24, to: now) ?? now
+        case .lastWeek:
+            return calendar.date(byAdding: .day, value: -7, to: now) ?? now
+        case .lastMonth:
+            return calendar.date(byAdding: .month, value: -1, to: now) ?? now
+        case .lastSixMonths:
+            return calendar.date(byAdding: .month, value: -6, to: now) ?? now
         }
     }
 }

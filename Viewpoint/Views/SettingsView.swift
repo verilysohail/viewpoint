@@ -1,6 +1,31 @@
 import SwiftUI
 
 struct SettingsView: View {
+    var body: some View {
+        TabView {
+            ConnectionSettingsTab()
+                .tabItem {
+                    Label("Connection", systemImage: "network")
+                }
+
+            PerformanceSettingsTab()
+                .tabItem {
+                    Label("Performance", systemImage: "gauge")
+                }
+
+            LogsSettingsTab()
+                .tabItem {
+                    Label("Logs", systemImage: "doc.text")
+                }
+        }
+        .padding(20)
+        .frame(width: 500, height: 450)
+    }
+}
+
+// MARK: - Connection Settings Tab
+
+struct ConnectionSettingsTab: View {
     @AppStorage("jiraBaseURL") private var jiraBaseURL: String = ""
     @AppStorage("jiraEmail") private var jiraEmail: String = ""
     @State private var jiraAPIKey: String = ""
@@ -29,31 +54,6 @@ struct SettingsView: View {
                     .font(.caption)
             }
 
-            Section {
-                Text("Logs")
-                    .font(.headline)
-
-                HStack {
-                    Text("Log File Location:")
-                        .font(.caption)
-                    Spacer()
-                    Button("Show in Finder") {
-                        NSWorkspace.shared.selectFile(Logger.shared.getLogFileURL().path, inFileViewerRootedAtPath: "")
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundColor(.blue)
-                }
-
-                HStack {
-                    Spacer()
-                    Button("Clear Log") {
-                        Logger.shared.clearLog()
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundColor(.red)
-                }
-            }
-
             if let error = errorMessage {
                 Text(error)
                     .foregroundColor(.red)
@@ -74,8 +74,6 @@ struct SettingsView: View {
                 .keyboardShortcut(.defaultAction)
             }
         }
-        .padding(20)
-        .frame(width: 500, height: 450)
         .onAppear {
             loadAPIKey()
         }
@@ -117,6 +115,94 @@ struct SettingsView: View {
     private func loadAPIKey() {
         if let apiKey = KeychainHelper.load(key: "jiraAPIKey") {
             jiraAPIKey = apiKey
+        }
+    }
+}
+
+// MARK: - Performance Settings Tab
+
+struct PerformanceSettingsTab: View {
+    @AppStorage("initialLoadCount") private var initialLoadCount: Int = 100
+
+    var body: some View {
+        Form {
+            Section {
+                Text("Performance Settings")
+                    .font(.headline)
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Initial Load Count")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+
+                    HStack {
+                        TextField("Count", value: $initialLoadCount, format: .number)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 100)
+
+                        Text("issues")
+                            .foregroundColor(.secondary)
+                    }
+
+                    Text("Number of issues to fetch on initial load. Lower values load faster but may require clicking \"Load More\" to see all issues.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            Section {
+                Text("Recommended values:")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("• 100 - Fast initial load (recommended)")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+
+                    Text("• 500 - Balanced performance")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+
+                    Text("• 1000+ - Slower but shows more issues")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Logs Settings Tab
+
+struct LogsSettingsTab: View {
+    var body: some View {
+        Form {
+            Section {
+                Text("Logs")
+                    .font(.headline)
+
+                HStack {
+                    Text("Log File Location:")
+                        .font(.caption)
+                    Spacer()
+                    Button("Show in Finder") {
+                        NSWorkspace.shared.selectFile(Logger.shared.getLogFileURL().path, inFileViewerRootedAtPath: "")
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundColor(.blue)
+                }
+
+                HStack {
+                    Spacer()
+                    Button("Clear Log") {
+                        Logger.shared.clearLog()
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundColor(.red)
+                }
+            }
         }
     }
 }

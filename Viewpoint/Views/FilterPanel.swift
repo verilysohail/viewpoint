@@ -7,24 +7,53 @@ struct FilterPanel: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                // Show only my issues toggle
-                HStack {
-                    Toggle(isOn: Binding(
-                        get: { jiraService.filters.showOnlyMyIssues },
-                        set: { value in
-                            jiraService.filters.showOnlyMyIssues = value
-                            jiraService.applyFilters()
+                // Show only my issues toggle and filter controls
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Toggle(isOn: Binding(
+                            get: { jiraService.filters.showOnlyMyIssues },
+                            set: { value in
+                                jiraService.filters.showOnlyMyIssues = value
+                                jiraService.applyFilters()
+                            }
+                        )) {
+                            HStack {
+                                Image(systemName: "person.circle")
+                                    .foregroundColor(.accentColor)
+                                Text("Show only my issues")
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                            }
                         }
-                    )) {
-                        HStack {
-                            Image(systemName: "person.circle")
-                                .foregroundColor(.accentColor)
-                            Text("Show only my issues")
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                        }
+                        .toggleStyle(.switch)
                     }
-                    .toggleStyle(.switch)
+
+                    // Filter control buttons
+                    HStack(spacing: 8) {
+                        // Expand/Collapse all buttons
+                        Button("Expand all") {
+                            expandedSections = Set(FilterCategory.allCases)
+                        }
+                        .buttonStyle(.plain)
+                        .font(.caption)
+
+                        Button("Collapse all") {
+                            expandedSections.removeAll()
+                        }
+                        .buttonStyle(.plain)
+                        .font(.caption)
+
+                        Divider()
+                            .frame(height: 12)
+
+                        // Clear filters button
+                        Button("Clear filters") {
+                            clearFilters()
+                        }
+                        .buttonStyle(.plain)
+                        .font(.caption)
+                        .foregroundColor(.red)
+                    }
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
@@ -160,11 +189,23 @@ struct FilterPanel: View {
         }
         .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
     }
+
+    private func clearFilters() {
+        jiraService.filters.projects.removeAll()
+        jiraService.filters.statuses.removeAll()
+        jiraService.filters.assignees.removeAll()
+        jiraService.filters.issueTypes.removeAll()
+        jiraService.filters.epics.removeAll()
+        jiraService.filters.sprints.removeAll()
+        jiraService.filters.startDate = nil
+        jiraService.filters.endDate = nil
+        jiraService.applyFilters()
+    }
 }
 
 // MARK: - Filter Section
 
-enum FilterCategory: Hashable {
+enum FilterCategory: Hashable, CaseIterable {
     case status, sprint, assignee, issueType, project, epic, timePeriod
 }
 

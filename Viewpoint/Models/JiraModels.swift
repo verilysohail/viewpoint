@@ -14,8 +14,45 @@ struct JiraIssue: Codable, Identifiable, Hashable {
     var project: String { fields.project.name }
     var epic: String? { fields.customfield_10014 } // Epic link field
     var priority: String? { fields.priority?.name }
-    var created: Date? { ISO8601DateFormatter().date(from: fields.created ?? "") }
-    var updated: Date? { ISO8601DateFormatter().date(from: fields.updated ?? "") }
+    var created: Date? {
+        guard let dateString = fields.created else { return nil }
+        // Try with fractional seconds first, then without
+        if let date = JiraIssue.dateFormatterWithFractionalSeconds.date(from: dateString) {
+            return date
+        }
+        if let date = JiraIssue.dateFormatterWithoutFractionalSeconds.date(from: dateString) {
+            return date
+        }
+        // If parsing fails, log it for debugging
+        Logger.shared.warning("Failed to parse created date for \(key): '\(dateString)'")
+        return nil
+    }
+    var updated: Date? {
+        guard let dateString = fields.updated else { return nil }
+        // Try with fractional seconds first, then without
+        if let date = JiraIssue.dateFormatterWithFractionalSeconds.date(from: dateString) {
+            return date
+        }
+        if let date = JiraIssue.dateFormatterWithoutFractionalSeconds.date(from: dateString) {
+            return date
+        }
+        // If parsing fails, log it for debugging
+        Logger.shared.warning("Failed to parse updated date for \(key): '\(dateString)'")
+        return nil
+    }
+
+    // Shared date formatters for Jira's ISO8601 format
+    private static let dateFormatterWithFractionalSeconds: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+
+    private static let dateFormatterWithoutFractionalSeconds: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter
+    }()
 }
 
 struct IssueFields: Codable, Hashable {
@@ -208,10 +245,12 @@ struct IssueFilters {
 
         // Return a valid JQL query, or a default one if no filters are set
         if jqlParts.isEmpty {
-            return "order by updated DESC"
+            // Jira Cloud requires at least one search restriction
+            // Default to issues created in the last 30 days
+            return "created >= -30d order by created DESC"
         }
 
-        return jqlParts.joined(separator: " AND ") + " order by updated DESC"
+        return jqlParts.joined(separator: " AND ") + " order by created DESC"
     }
 }
 

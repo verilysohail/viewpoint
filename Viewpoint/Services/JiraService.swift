@@ -7,9 +7,17 @@ class JiraService: ObservableObject {
     @Published var currentSprintInfo: SprintInfo?
     @Published var isLoading = false
     @Published var errorMessage: String?
+    @Published var totalIssuesAvailable: Int = 0
+    @Published var hasMoreIssues: Bool = false
 
     private let config = Configuration.shared
     private var cancellables = Set<AnyCancellable>()
+    private var currentStartAt: Int = 0
+
+    // User-configurable initial load count
+    private var initialLoadCount: Int {
+        UserDefaults.standard.integer(forKey: "initialLoadCount") == 0 ? 100 : UserDefaults.standard.integer(forKey: "initialLoadCount")
+    }
 
     // Available filter options (populated from current issue results)
     @Published var availableStatuses: Set<String> = []
@@ -84,94 +92,113 @@ class JiraService: ObservableObject {
         return request
     }
 
-    func fetchMyIssues() async {
+    func fetchMyIssues(updateAvailableOptions: Bool = true) async {
+        // Reset pagination state when fetching fresh
+        await MainActor.run {
+            isLoading = true
+            currentStartAt = 0
+            issues = []
+        }
+
+        await loadMoreIssues(updateAvailableOptions: updateAvailableOptions, initialFetchLimit: initialLoadCount)
+    }
+
+    func loadMoreIssues(updateAvailableOptions: Bool = false, initialFetchLimit: Int = 500) async {
         await MainActor.run { isLoading = true }
 
         let jql = filters.buildJQL(userEmail: config.jiraEmail)
 
-        // Build URL for the new search/jql endpoint
-        guard let url = URL(string: "\(config.jiraBaseURL)/rest/api/3/search/jql") else {
-            await MainActor.run {
-                errorMessage = "Invalid base URL"
-                isLoading = false
-            }
-            return
-        }
-
-        // Create POST request with JQL in the body
-        var request = createRequest(url: url)
-        request.httpMethod = "POST"
-
-        // Specify fields to return (the new API requires this)
-        let requestBody: [String: Any] = [
-            "jql": jql,
-            "maxResults": 100,
-            "fields": [
-                "summary",
-                "status",
-                "assignee",
-                "issuetype",
-                "project",
-                "priority",
-                "created",
-                "updated",
-                "customfield_10014",  // Epic Link
-                "customfield_10016",  // Story Points
-                "customfield_10020",  // Sprint
-                "timeoriginalestimate", // Original Estimate
-                "timespent",           // Time Logged
-                "timeestimate"         // Time Remaining
-            ]
-        ]
+        let maxResults = 100
+        let currentStart = await MainActor.run { currentStartAt }
+        var allIssues: [JiraIssue] = await MainActor.run { issues }
+        var startAt = currentStart
+        let fetchLimit = currentStart == 0 ? initialFetchLimit : 500 // Initial fetch or subsequent "Load more"
+        var total = 0
 
         do {
-            request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
-        } catch {
-            await MainActor.run {
-                errorMessage = "Failed to encode request"
-                isLoading = false
-            }
-            return
-        }
-
-        do {
-            Logger.shared.info("Fetching issues from: \(url)")
             Logger.shared.info("JQL: \(jql)")
+            Logger.shared.info("Starting at: \(startAt), will fetch up to \(fetchLimit) more issues")
 
-            let (data, response) = try await URLSession.shared.data(for: request)
+            var fetchedInThisBatch = 0
+            var lastFetchWasFull = true
 
-            guard let httpResponse = response as? HTTPURLResponse else {
-                throw URLError(.badServerResponse)
-            }
+            repeat {
+                // Build URL with query parameters for the new /search/jql endpoint
+                var components = URLComponents(string: "\(config.jiraBaseURL)/rest/api/3/search/jql")!
+                components.queryItems = [
+                    URLQueryItem(name: "jql", value: jql),
+                    URLQueryItem(name: "startAt", value: String(startAt)),
+                    URLQueryItem(name: "maxResults", value: String(maxResults)),
+                    URLQueryItem(name: "fields", value: "summary,status,assignee,issuetype,project,priority,created,updated,customfield_10014,customfield_10016,customfield_10020,timeoriginalestimate,timespent,timeestimate")
+                ]
 
-            Logger.shared.info("Response status: \(httpResponse.statusCode)")
-
-            if httpResponse.statusCode != 200 {
-                // Try to parse error message from response
-                if let errorMessage = String(data: data, encoding: .utf8) {
-                    Logger.shared.error("Error response (\(httpResponse.statusCode)): \(errorMessage)")
+                guard let url = components.url else {
+                    await MainActor.run {
+                        errorMessage = "Invalid URL"
+                        isLoading = false
+                    }
+                    return
                 }
-                throw NSError(domain: "JiraAPI", code: httpResponse.statusCode,
-                             userInfo: [NSLocalizedDescriptionKey: "HTTP \(httpResponse.statusCode)"])
-            }
 
-            // Log the raw response to see the structure
-            if let jsonString = String(data: data, encoding: .utf8) {
-                Logger.shared.debug("Raw JSON response (first 500 chars): \(jsonString.prefix(500))")
-            }
+                Logger.shared.info("Fetching issues from: \(url)")
 
-            let searchResponse = try JSONDecoder().decode(JiraSearchResponse.self, from: data)
-            Logger.shared.info("Successfully fetched \(searchResponse.issues.count) issues")
+                // Create GET request
+                let request = createRequest(url: url)
+
+                let (data, response) = try await URLSession.shared.data(for: request)
+
+                guard let httpResponse = response as? HTTPURLResponse else {
+                    throw URLError(.badServerResponse)
+                }
+
+                Logger.shared.info("Response status: \(httpResponse.statusCode) (fetching batch starting at \(startAt))")
+
+                if httpResponse.statusCode != 200 {
+                    // Try to parse error message from response
+                    if let errorMessage = String(data: data, encoding: .utf8) {
+                        Logger.shared.error("Error response (\(httpResponse.statusCode)): \(errorMessage)")
+                    }
+                    throw NSError(domain: "JiraAPI", code: httpResponse.statusCode,
+                                 userInfo: [NSLocalizedDescriptionKey: "HTTP \(httpResponse.statusCode)"])
+                }
+
+                let searchResponse = try JSONDecoder().decode(JiraSearchResponse.self, from: data)
+
+                // The new /search/jql API doesn't return a total field, so we need to infer if there are more issues
+                // by checking if we got a full page of results
+                allIssues.append(contentsOf: searchResponse.issues)
+                startAt += searchResponse.issues.count
+                fetchedInThisBatch += searchResponse.issues.count
+
+                // If we got fewer issues than requested, we've reached the end
+                lastFetchWasFull = searchResponse.issues.count >= maxResults
+
+                Logger.shared.info("Fetched \(searchResponse.issues.count) issues (loaded so far: \(allIssues.count), got full page: \(lastFetchWasFull))")
+
+            } while fetchedInThisBatch < fetchLimit && lastFetchWasFull
+
+            // Since the API doesn't provide total, we estimate based on whether the last fetch was a full page
+            // If it was a full page, there might be more; otherwise, we've got everything
+            total = lastFetchWasFull ? allIssues.count + 1 : allIssues.count // +1 to indicate there might be more
+
+            Logger.shared.info("Successfully fetched \(allIssues.count) of \(total) total issues")
 
             await MainActor.run {
-                self.issues = searchResponse.issues
-                self.updateAvailableFilters()
+                self.issues = allIssues
+                self.totalIssuesAvailable = total
+                self.hasMoreIssues = allIssues.count < total
+                self.currentStartAt = startAt
+                if updateAvailableOptions {
+                    self.updateAvailableFilters()
+                }
                 self.isLoading = false
                 self.errorMessage = nil
             }
 
-            // Fetch epic summaries for all epics in the result set
-            await fetchEpicSummaries()
+            // Fetch epic summaries for all epics in the result set (only on initial fetch)
+            if currentStart == 0 {
+                await fetchEpicSummaries()
+            }
         } catch {
             Logger.shared.error("Error fetching issues: \(error)")
             await MainActor.run {
@@ -247,42 +274,20 @@ class JiraService: ObservableObject {
     func fetchSprintInfo(sprintId: Int) async {
         let jql = "sprint = \(sprintId)"
 
-        // Build URL for the new search/jql endpoint
-        guard let url = URL(string: "\(config.jiraBaseURL)/rest/api/3/search/jql") else {
-            return
-        }
-
-        // Create POST request with JQL in the body
-        var request = createRequest(url: url)
-        request.httpMethod = "POST"
-
-        // Specify fields to return (the new API requires this)
-        let requestBody: [String: Any] = [
-            "jql": jql,
-            "maxResults": 100,
-            "fields": [
-                "summary",
-                "status",
-                "assignee",
-                "issuetype",
-                "project",
-                "priority",
-                "created",
-                "updated",
-                "customfield_10014",  // Epic Link
-                "customfield_10016",  // Story Points
-                "customfield_10020",  // Sprint
-                "timeoriginalestimate", // Original Estimate
-                "timespent",           // Time Logged
-                "timeestimate"         // Time Remaining
-            ]
+        // Build URL with query parameters for the new /search/jql endpoint
+        var components = URLComponents(string: "\(config.jiraBaseURL)/rest/api/3/search/jql")!
+        components.queryItems = [
+            URLQueryItem(name: "jql", value: jql),
+            URLQueryItem(name: "maxResults", value: "100"),
+            URLQueryItem(name: "fields", value: "summary,status,assignee,issuetype,project,priority,created,updated,customfield_10014,customfield_10016,customfield_10020,timeoriginalestimate,timespent,timeestimate")
         ]
 
-        guard let httpBody = try? JSONSerialization.data(withJSONObject: requestBody) else {
+        guard let url = components.url else {
             return
         }
 
-        request.httpBody = httpBody
+        // Create GET request
+        let request = createRequest(url: url)
 
         do {
             let (data, _) = try await URLSession.shared.data(for: request)
@@ -310,21 +315,22 @@ class JiraService: ObservableObject {
         let epicKeysArray = Array(epicKeys)
         let jql = "key in (\(epicKeysArray.map { "\"\($0)\"" }.joined(separator: ", ")))"
 
-        guard let url = URL(string: "\(config.jiraBaseURL)/rest/api/3/search/jql") else {
+        // Build URL with query parameters for the new /search/jql endpoint
+        var components = URLComponents(string: "\(config.jiraBaseURL)/rest/api/3/search/jql")!
+        components.queryItems = [
+            URLQueryItem(name: "jql", value: jql),
+            URLQueryItem(name: "maxResults", value: String(epicKeys.count)),
+            URLQueryItem(name: "fields", value: "summary")
+        ]
+
+        guard let url = components.url else {
             return
         }
 
-        var request = createRequest(url: url)
-        request.httpMethod = "POST"
-
-        let requestBody: [String: Any] = [
-            "jql": jql,
-            "maxResults": epicKeys.count,
-            "fields": ["summary"]
-        ]
+        // Create GET request
+        let request = createRequest(url: url)
 
         do {
-            request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
 
             let (data, response) = try await URLSession.shared.data(for: request)
 
@@ -379,7 +385,9 @@ class JiraService: ObservableObject {
     func applyFilters() {
         saveFilters()
         Task {
-            await fetchMyIssues()
+            // Don't update available filter options when applying filters
+            // This keeps all original options visible for multi-select
+            await fetchMyIssues(updateAvailableOptions: false)
         }
     }
 
