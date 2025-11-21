@@ -171,7 +171,24 @@ class VertexAIClient {
                     // Extract text from this chunk
                     if let candidates = chunk["candidates"] as? [[String: Any]] {
                         Logger.shared.info("Found \(candidates.count) candidates")
-                        if let content = candidates.first?["content"] as? [String: Any] {
+
+                        let firstCandidate = candidates.first
+                        Logger.shared.info("First candidate keys: \(firstCandidate?.keys.joined(separator: ", ") ?? "none")")
+
+                        // Check finish reason for blocked/filtered responses
+                        if let finishReason = firstCandidate?["finishReason"] as? String {
+                            Logger.shared.info("Finish reason: \(finishReason)")
+                            if finishReason != "STOP" {
+                                Logger.shared.warning("Response may be incomplete. Finish reason: \(finishReason)")
+                            }
+                        }
+
+                        // Check for safety ratings
+                        if let safetyRatings = firstCandidate?["safetyRatings"] as? [[String: Any]] {
+                            Logger.shared.info("Safety ratings present: \(safetyRatings.count) ratings")
+                        }
+
+                        if let content = firstCandidate?["content"] as? [String: Any] {
                             Logger.shared.info("Content keys: \(content.keys.joined(separator: ", "))")
                             if let parts = content["parts"] as? [[String: Any]] {
                                 Logger.shared.info("Found \(parts.count) parts")
@@ -184,7 +201,7 @@ class VertexAIClient {
                                     Logger.shared.warning("No 'text' field in first part. Part keys: \(parts.first?.keys.joined(separator: ", ") ?? "none")")
                                 }
                             } else {
-                                Logger.shared.warning("'parts' is not an array or missing")
+                                Logger.shared.warning("'parts' is not an array or missing. Content: \(content)")
                             }
                         } else {
                             Logger.shared.warning("'content' is not a dict or missing from first candidate")
