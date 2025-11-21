@@ -1039,6 +1039,18 @@ class JiraService: ObservableObject {
             }
         }
 
+        // Optional: Components
+        if let components = fields["components"] as? [String] {
+            jiraFields["components"] = components.map { ["name": $0] }
+        } else if let componentString = fields["components"] as? String {
+            let componentNames = componentString.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+            jiraFields["components"] = componentNames.map { ["name": $0] }
+        } else {
+            // Default to "Management Tasks" component if not specified
+            jiraFields["components"] = [["name": "Management Tasks"]]
+            Logger.shared.info("Using default component: Management Tasks")
+        }
+
         let requestBody: [String: Any] = ["fields": jiraFields]
 
         do {
@@ -1114,18 +1126,24 @@ class JiraService: ObservableObject {
         let summaries = await MainActor.run { self.epicSummaries }
         let lowercaseQuery = query.lowercased()
 
+        Logger.shared.info("Searching for epic matching query: '\(query)'")
+        Logger.shared.info("Available epics: \(summaries.map { "\($0.key): \($0.value)" }.joined(separator: ", "))")
+
         // First try exact match on epic key (e.g., "SETI-123")
         if let exactKey = summaries.keys.first(where: { $0.lowercased() == lowercaseQuery }) {
+            Logger.shared.info("Found exact key match: \(exactKey)")
             return exactKey
         }
 
         // Then try exact match on summary
         if let exactSummary = summaries.first(where: { $0.value.lowercased() == lowercaseQuery }) {
+            Logger.shared.info("Found exact summary match: \(exactSummary.key)")
             return exactSummary.key
         }
 
         // Try contains match on summary
         if let containsMatch = summaries.first(where: { $0.value.lowercased().contains(lowercaseQuery) }) {
+            Logger.shared.info("Found contains match: \(containsMatch.key) (\(containsMatch.value))")
             return containsMatch.key
         }
 
@@ -1146,6 +1164,12 @@ class JiraService: ObservableObject {
         }
 
         // Only return if at least one word matched
-        return bestScore > 0 ? bestMatch : nil
+        if bestScore > 0 && bestMatch != nil {
+            Logger.shared.info("Found fuzzy match: \(bestMatch!) (score: \(bestScore))")
+            return bestMatch
+        }
+
+        Logger.shared.warning("No epic match found for query: '\(query)'")
+        return nil
     }
 }
