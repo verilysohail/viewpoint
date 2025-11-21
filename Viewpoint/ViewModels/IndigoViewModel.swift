@@ -10,6 +10,7 @@ class IndigoViewModel: ObservableObject {
     @Published var isProcessing: Bool = false
     @Published var keepOnTop: Bool = true
     @Published var modelStatus: String = ""
+    @Published var selectedModel: AIModel
 
     private let jiraService: JiraService
     private var cancellables = Set<AnyCancellable>()
@@ -20,6 +21,10 @@ class IndigoViewModel: ObservableObject {
 
     init(jiraService: JiraService) {
         self.jiraService = jiraService
+
+        // Load selected model from UserDefaults
+        let modelRaw = UserDefaults.standard.string(forKey: "selectedAIModel") ?? AIModel.gemini3ProPreview.rawValue
+        self.selectedModel = AIModel(rawValue: modelRaw) ?? .gemini3ProPreview
 
         // Initialize services
         self.whisperService = WhisperService()
@@ -34,6 +39,22 @@ class IndigoViewModel: ObservableObject {
 
         // Load Whisper model in background
         loadWhisperModel()
+    }
+
+    func changeModel(_ newModel: AIModel) {
+        selectedModel = newModel
+
+        // Save to UserDefaults
+        UserDefaults.standard.set(newModel.rawValue, forKey: "selectedAIModel")
+
+        // Reconfigure AI service
+        aiService = AIService(jiraService: jiraService)
+
+        addMessage(Message(
+            text: "✓ Switched to \(newModel.displayName)",
+            sender: .system,
+            status: .success
+        ))
     }
 
     func sendMessage() {

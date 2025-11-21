@@ -54,6 +54,40 @@ struct IndigoView: View {
 
             Spacer()
 
+            // Model Selector
+            Menu {
+                ForEach(AIModel.allCases) { model in
+                    Button(action: {
+                        viewModel.changeModel(model)
+                    }) {
+                        HStack {
+                            Text(model.displayName)
+                            if viewModel.selectedModel == model {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "brain.head.profile")
+                        .font(.system(size: 14))
+                    Text(viewModel.selectedModel.displayName)
+                        .font(.system(size: 12))
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 10))
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Color.accentColor.opacity(0.1))
+                .cornerRadius(6)
+            }
+            .menuStyle(.borderlessButton)
+            .help("Select AI model")
+
+            Spacer()
+                .frame(width: 12)
+
             // Controls
             HStack(spacing: 12) {
                 // Keep on Top toggle
