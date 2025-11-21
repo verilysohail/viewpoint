@@ -8,7 +8,7 @@ struct ContentView: View {
     @AppStorage("sortDirection") private var sortDirectionRaw: String = "descending"
     @AppStorage("groupOption") private var groupOptionRaw: String = "none"
     @AppStorage("textSize") private var textSize: Double = 1.0
-    @AppStorage("filterPanelHeight") private var filterPanelHeight: Double = 0
+    @AppStorage("filterPanelHeight") private var filterPanelHeight: Double = 200
     @State private var showingLogWorkForSelected = false
     @AppStorage("colorScheme") private var colorSchemePreference: String = "auto"
     @State private var searchText: String = ""
@@ -104,47 +104,42 @@ struct ContentView: View {
         return grouped.sorted { $0.key < $1.key }
     }
 
-    private func filterHeight(totalHeight: CGFloat) -> CGFloat {
-        // Subtract header height (approximately 80px)
-        let availableHeight = totalHeight - 80
-
-        // Filter panel gets 20% of available space (issue list gets 80%)
-        return availableHeight * 0.2
+    var issueContentView: some View {
+        Group {
+            if jiraService.isLoading {
+                ProgressView("Loading issues...")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if let error = jiraService.errorMessage {
+                VStack {
+                    Image(systemName: "exclamationmark.triangle")
+                        .font(.system(size: 48))
+                        .foregroundColor(.orange)
+                    Text(error)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding()
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                IssueListView(selectedIssue: $selectedIssue, groupedIssues: groupedIssues, expandedSections: $expandedSections)
+            }
+        }
     }
 
     var body: some View {
-        GeometryReader { geometry in
-            VStack(spacing: 0) {
-                // Header with title and refresh
-                HeaderView(filteredCount: filteredIssues.count, searchText: searchText)
+        VStack(spacing: 0) {
+            // Header with title and refresh
+            HeaderView(filteredCount: filteredIssues.count, searchText: searchText)
 
-                // Filter panel (fixed 30% height)
-                if showFilters {
-                    FilterPanel()
-                        .frame(height: filterHeight(totalHeight: geometry.size.height))
-                }
-
-                // Issue list (takes remaining space)
-                Group {
-                    if jiraService.isLoading {
-                        ProgressView("Loading issues...")
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    } else if let error = jiraService.errorMessage {
-                        VStack {
-                            Image(systemName: "exclamationmark.triangle")
-                                .font(.system(size: 48))
-                                .foregroundColor(.orange)
-                            Text(error)
-                                .foregroundColor(.secondary)
-                                .multilineTextAlignment(.center)
-                                .padding()
-                        }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    } else {
-                        IssueListView(selectedIssue: $selectedIssue, groupedIssues: groupedIssues, expandedSections: $expandedSections)
-                    }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // Split view with resizable divider
+            if showFilters {
+                PersistentSplitView(
+                    top: FilterPanel(),
+                    bottom: issueContentView,
+                    position: $filterPanelHeight
+                )
+            } else {
+                issueContentView
             }
         }
         .sheet(isPresented: $showingLogWorkForSelected) {
@@ -352,24 +347,6 @@ struct ContentView: View {
             // Flexible space for customization
             ToolbarItem(id: "flexibleSpace", placement: .automatic, showsByDefault: false) {
                 Spacer()
-            }
-
-            // Fixed-width spacers for customization (small)
-            ToolbarItem(id: "fixedSpace10", placement: .automatic, showsByDefault: false) {
-                Spacer()
-                    .frame(width: 10)
-            }
-
-            // Fixed-width spacers for customization (medium)
-            ToolbarItem(id: "fixedSpace20", placement: .automatic, showsByDefault: false) {
-                Spacer()
-                    .frame(width: 20)
-            }
-
-            // Fixed-width spacers for customization (large)
-            ToolbarItem(id: "fixedSpace40", placement: .automatic, showsByDefault: false) {
-                Spacer()
-                    .frame(width: 40)
             }
         }
         .environment(\.textSizeMultiplier, textSize)
