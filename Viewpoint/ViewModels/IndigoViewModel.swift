@@ -521,6 +521,21 @@ class IndigoViewModel: ObservableObject {
         ))
     }
 
+    func refreshMainWindow() {
+        addMessage(Message(
+            text: "🔄 Refreshing main window...",
+            sender: .system
+        ))
+        Task {
+            await jiraService.fetchMyIssues()
+            addMessage(Message(
+                text: "✓ Main window refreshed!",
+                sender: .system,
+                status: .success
+            ))
+        }
+    }
+
     func setWindowFloating(_ floating: Bool) {
         // Get the Indigo window
         for window in NSApplication.shared.windows {

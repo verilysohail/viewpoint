@@ -585,7 +585,6 @@ class JiraService: ObservableObject {
                     if let httpResponse = response as? HTTPURLResponse,
                        httpResponse.statusCode == 204 || httpResponse.statusCode == 200 {
                         Logger.shared.info("Successfully transitioned \(issueKey) to \(newStatus)")
-                        await fetchMyIssues()
                         return true
                     }
                 }
@@ -629,8 +628,6 @@ class JiraService: ObservableObject {
 
             if httpResponse.statusCode == 201 || httpResponse.statusCode == 200 {
                 Logger.shared.info("Successfully logged work for \(issueKey)")
-                // Refresh issues to update the time logged
-                await fetchMyIssues()
                 return true
             } else {
                 if let errorMessage = String(data: data, encoding: .utf8) {
@@ -711,14 +708,32 @@ class JiraService: ObservableObject {
                             self.availableSprints.filter { $0.state.lowercased() == "active" }
                         }
                         if let currentSprint = activeSprints.first {
-                            jiraFields["customfield_10020"] = [currentSprint.id]
+                            jiraFields["customfield_10020"] = currentSprint.id
+                        }
+                    } else {
+                        // Try to find sprint by name
+                        let matchingSprint = await findSprintByName(sprintValue)
+                        if let sprint = matchingSprint {
+                            jiraFields["customfield_10020"] = sprint.id
+                            Logger.shared.info("Matched sprint '\(sprintValue)' to: \(sprint.name) (ID: \(sprint.id))")
+                        } else {
+                            Logger.shared.warning("Could not find sprint matching: \(sprintValue)")
                         }
                     }
                 }
 
             case "epic":
-                if let epic = value as? String {
-                    jiraFields["customfield_10014"] = epic
+                if let epicQuery = value as? String {
+                    // Try to find epic by semantic search
+                    let matchingEpic = await findEpicByName(epicQuery)
+                    if let epicKey = matchingEpic {
+                        jiraFields["customfield_10014"] = epicKey
+                        Logger.shared.info("Matched epic '\(epicQuery)' to: \(epicKey)")
+                    } else {
+                        // Fallback to using it as-is (might be exact epic key)
+                        jiraFields["customfield_10014"] = epicQuery
+                        Logger.shared.warning("Could not find epic matching '\(epicQuery)', using as-is")
+                    }
                 }
 
             default:
@@ -743,7 +758,6 @@ class JiraService: ObservableObject {
 
             if httpResponse.statusCode == 204 || httpResponse.statusCode == 200 {
                 Logger.shared.info("Successfully updated issue: \(issueKey)")
-                await fetchMyIssues()
                 return true
             } else {
                 if let errorMessage = String(data: data, encoding: .utf8) {
@@ -838,7 +852,6 @@ class JiraService: ObservableObject {
 
             if httpResponse.statusCode == 204 || httpResponse.statusCode == 200 {
                 Logger.shared.info("Successfully deleted issue \(issueKey)")
-                await fetchMyIssues()
                 return true
             } else {
                 if let errorMessage = String(data: data, encoding: .utf8) {
@@ -997,17 +1010,33 @@ class JiraService: ObservableObject {
                     self.availableSprints.filter { $0.state.lowercased() == "active" }
                 }
                 if let currentSprint = activeSprints.first {
-                    jiraFields["customfield_10020"] = [currentSprint.id]
+                    jiraFields["customfield_10020"] = currentSprint.id
                     Logger.shared.info("Using current sprint: \(currentSprint.name) (ID: \(currentSprint.id))")
+                }
+            } else {
+                // Try to find sprint by name
+                let matchingSprint = await findSprintByName(sprintValue)
+                if let sprint = matchingSprint {
+                    jiraFields["customfield_10020"] = sprint.id
+                    Logger.shared.info("Matched sprint '\(sprintValue)' to: \(sprint.name) (ID: \(sprint.id))")
+                } else {
+                    Logger.shared.warning("Could not find sprint matching: \(sprintValue)")
                 }
             }
         }
 
-        // Optional: Epic (needs epic key - for now just log it)
-        if let epic = fields["epic"] as? String {
-            Logger.shared.info("Epic specified: \(epic) - will need to set after creation")
-            // Note: Epic link is typically customfield_10014, but it varies by Jira instance
-            // For now, we'll log it and potentially set it in a follow-up update
+        // Optional: Epic (needs epic key)
+        if let epicQuery = fields["epic"] as? String {
+            // Try to find epic by semantic search
+            let matchingEpic = await findEpicByName(epicQuery)
+            if let epicKey = matchingEpic {
+                jiraFields["customfield_10014"] = epicKey
+                Logger.shared.info("Matched epic '\(epicQuery)' to: \(epicKey)")
+            } else {
+                // Fallback to using it as-is (might be exact epic key)
+                jiraFields["customfield_10014"] = epicQuery
+                Logger.shared.warning("Could not find epic matching '\(epicQuery)', using as-is")
+            }
         }
 
         let requestBody: [String: Any] = ["fields": jiraFields]
@@ -1030,8 +1059,6 @@ class JiraService: ObservableObject {
                 if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                    let issueKey = json["key"] as? String {
                     Logger.shared.info("Successfully created issue: \(issueKey)")
-                    // Refresh issues to show the new issue
-                    await fetchMyIssues()
                     return (true, issueKey)
                 }
                 return (true, nil)
@@ -1045,5 +1072,80 @@ class JiraService: ObservableObject {
             Logger.shared.error("Failed to create issue: \(error)")
             return (false, nil)
         }
+    }
+
+    // MARK: - Semantic Search Helpers
+
+    func findSprintByName(_ query: String) async -> JiraSprint? {
+        let sprints = await MainActor.run { self.availableSprints }
+        let lowercaseQuery = query.lowercased()
+
+        // First try exact match
+        if let exactMatch = sprints.first(where: { $0.name.lowercased() == lowercaseQuery }) {
+            return exactMatch
+        }
+
+        // Then try contains match
+        if let containsMatch = sprints.first(where: { $0.name.lowercased().contains(lowercaseQuery) }) {
+            return containsMatch
+        }
+
+        // Finally try fuzzy match - find sprint name that contains most query words
+        let queryWords = lowercaseQuery.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
+        var bestMatch: JiraSprint?
+        var bestScore = 0
+
+        for sprint in sprints {
+            let sprintName = sprint.name.lowercased()
+            let matchingWords = queryWords.filter { sprintName.contains($0) }
+            let score = matchingWords.count
+
+            if score > bestScore {
+                bestScore = score
+                bestMatch = sprint
+            }
+        }
+
+        // Only return if at least one word matched
+        return bestScore > 0 ? bestMatch : nil
+    }
+
+    func findEpicByName(_ query: String) async -> String? {
+        let summaries = await MainActor.run { self.epicSummaries }
+        let lowercaseQuery = query.lowercased()
+
+        // First try exact match on epic key (e.g., "SETI-123")
+        if let exactKey = summaries.keys.first(where: { $0.lowercased() == lowercaseQuery }) {
+            return exactKey
+        }
+
+        // Then try exact match on summary
+        if let exactSummary = summaries.first(where: { $0.value.lowercased() == lowercaseQuery }) {
+            return exactSummary.key
+        }
+
+        // Try contains match on summary
+        if let containsMatch = summaries.first(where: { $0.value.lowercased().contains(lowercaseQuery) }) {
+            return containsMatch.key
+        }
+
+        // Finally try fuzzy match - find epic summary that contains most query words
+        let queryWords = lowercaseQuery.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
+        var bestMatch: String?
+        var bestScore = 0
+
+        for (key, summary) in summaries {
+            let summaryLower = summary.lowercased()
+            let matchingWords = queryWords.filter { summaryLower.contains($0) }
+            let score = matchingWords.count
+
+            if score > bestScore {
+                bestScore = score
+                bestMatch = key
+            }
+        }
+
+        // Only return if at least one word matched
+        return bestScore > 0 ? bestMatch : nil
     }
 }

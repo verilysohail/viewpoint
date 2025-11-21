@@ -67,6 +67,13 @@ struct IndigoView: View {
                 .toggleStyle(.switch)
                 .controlSize(.small)
 
+                // Refresh main window
+                Button(action: { viewModel.refreshMainWindow() }) {
+                    Image(systemName: "arrow.clockwise")
+                }
+                .buttonStyle(.plain)
+                .help("Refresh main window")
+
                 // Clear history
                 Button(action: { viewModel.clearHistory() }) {
                     Image(systemName: "trash")

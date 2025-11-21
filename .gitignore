@@ -23,3 +23,5 @@ DerivedData/
 .Trash
 .Spotlight-V100
 .fseventsd
+*.env
+.env.*
