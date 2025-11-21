@@ -144,8 +144,7 @@ class AIService {
 
         2. CREATE: Create new issues
            Format: `CREATE: project=X | summary=Y | type=Z | ...`
-           Example: CREATE: project=SETI | summary=Fix bug | type=Bug | assignee=\(context.currentUser)
-           Note: Components field defaults to "Management Tasks" if not specified
+           Example: CREATE: project=SETI | summary=Fix bug | type=Bug | assignee=\(context.currentUser) | components=Management Tasks
 
         3. UPDATE: Update issue fields (summary, description, assignee, priority, labels, components, estimates, sprint, epic)
            Format: `UPDATE: <key> | field=value | field2=value2`

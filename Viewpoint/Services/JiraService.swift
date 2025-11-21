@@ -26,6 +26,7 @@ class JiraService: ObservableObject {
     @Published var availableProjects: Set<String> = []
     @Published var availableEpics: Set<String> = []
     @Published var availableSprints: [JiraSprint] = []
+    @Published var availableComponents: Set<String> = []
 
     // Epic summaries (epic key -> summary)
     @Published var epicSummaries: [String: String] = [:]
@@ -129,7 +130,7 @@ class JiraService: ObservableObject {
                     URLQueryItem(name: "jql", value: jql),
                     URLQueryItem(name: "startAt", value: String(startAt)),
                     URLQueryItem(name: "maxResults", value: String(maxResults)),
-                    URLQueryItem(name: "fields", value: "summary,status,assignee,issuetype,project,priority,created,updated,customfield_10014,customfield_10016,customfield_10020,timeoriginalestimate,timespent,timeestimate")
+                    URLQueryItem(name: "fields", value: "summary,status,assignee,issuetype,project,priority,created,updated,components,customfield_10014,customfield_10016,customfield_10020,timeoriginalestimate,timespent,timeestimate")
                 ]
 
                 guard let url = components.url else {
@@ -228,7 +229,7 @@ class JiraService: ObservableObject {
                 URLQueryItem(name: "jql", value: jql),
                 URLQueryItem(name: "startAt", value: "0"),
                 URLQueryItem(name: "maxResults", value: String(maxResults)),
-                URLQueryItem(name: "fields", value: "summary,status,assignee,issuetype,project,priority,created,updated,customfield_10014,customfield_10016,customfield_10020,timeoriginalestimate,timespent,timeestimate")
+                URLQueryItem(name: "fields", value: "summary,status,assignee,issuetype,project,priority,created,updated,components,customfield_10014,customfield_10016,customfield_10020,timeoriginalestimate,timespent,timeestimate")
             ]
 
             guard let url = components.url else {
@@ -352,7 +353,7 @@ class JiraService: ObservableObject {
         components.queryItems = [
             URLQueryItem(name: "jql", value: jql),
             URLQueryItem(name: "maxResults", value: "100"),
-            URLQueryItem(name: "fields", value: "summary,status,assignee,issuetype,project,priority,created,updated,customfield_10014,customfield_10016,customfield_10020,timeoriginalestimate,timespent,timeestimate")
+            URLQueryItem(name: "fields", value: "summary,status,assignee,issuetype,project,priority,created,updated,components,customfield_10014,customfield_10016,customfield_10020,timeoriginalestimate,timespent,timeestimate")
         ]
 
         guard let url = components.url else {
@@ -433,6 +434,17 @@ class JiraService: ObservableObject {
         availableIssueTypes = Set(issues.map { $0.issueType })
         availableProjects = Set(issues.map { $0.project })
         availableEpics = Set(issues.compactMap { $0.epic })
+
+        // Extract unique components from issues
+        var componentSet: Set<String> = []
+        for issue in issues {
+            if let components = issue.fields.components {
+                for component in components {
+                    componentSet.insert(component.name)
+                }
+            }
+        }
+        availableComponents = componentSet
 
         // Extract unique sprints from issues
         var sprintMap: [Int: JiraSprint] = [:]
@@ -683,10 +695,31 @@ class JiraService: ObservableObject {
 
             case "components":
                 if let components = value as? [String] {
-                    jiraFields["components"] = components.map { ["name": $0] }
+                    // Smart lookup for each component
+                    var resolvedComponents: [[String: String]] = []
+                    for componentQuery in components {
+                        if let matchedComponent = await findComponentByName(componentQuery) {
+                            resolvedComponents.append(["name": matchedComponent])
+                            Logger.shared.info("Matched component '\(componentQuery)' to: \(matchedComponent)")
+                        } else {
+                            resolvedComponents.append(["name": componentQuery])
+                            Logger.shared.warning("Could not find component matching '\(componentQuery)', using as-is")
+                        }
+                    }
+                    jiraFields["components"] = resolvedComponents
                 } else if let componentString = value as? String {
-                    let componentNames = componentString.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
-                    jiraFields["components"] = componentNames.map { ["name": $0] }
+                    let componentQueries = componentString.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+                    var resolvedComponents: [[String: String]] = []
+                    for componentQuery in componentQueries {
+                        if let matchedComponent = await findComponentByName(componentQuery) {
+                            resolvedComponents.append(["name": matchedComponent])
+                            Logger.shared.info("Matched component '\(componentQuery)' to: \(matchedComponent)")
+                        } else {
+                            resolvedComponents.append(["name": componentQuery])
+                            Logger.shared.warning("Could not find component matching '\(componentQuery)', using as-is")
+                        }
+                    }
+                    jiraFields["components"] = resolvedComponents
                 }
 
             case "originalestimate", "timetracking.originalestimate":
@@ -1041,14 +1074,30 @@ class JiraService: ObservableObject {
 
         // Optional: Components
         if let components = fields["components"] as? [String] {
-            jiraFields["components"] = components.map { ["name": $0] }
+            // Smart lookup for each component
+            var resolvedComponents: [[String: String]] = []
+            for componentQuery in components {
+                if let matchedComponent = await findComponentByName(componentQuery) {
+                    resolvedComponents.append(["name": matchedComponent])
+                } else {
+                    // Use as-is if no match found
+                    resolvedComponents.append(["name": componentQuery])
+                    Logger.shared.warning("Could not find component matching '\(componentQuery)', using as-is")
+                }
+            }
+            jiraFields["components"] = resolvedComponents
         } else if let componentString = fields["components"] as? String {
-            let componentNames = componentString.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
-            jiraFields["components"] = componentNames.map { ["name": $0] }
-        } else {
-            // Default to "Management Tasks" component if not specified
-            jiraFields["components"] = [["name": "Management Tasks"]]
-            Logger.shared.info("Using default component: Management Tasks")
+            let componentQueries = componentString.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+            var resolvedComponents: [[String: String]] = []
+            for componentQuery in componentQueries {
+                if let matchedComponent = await findComponentByName(componentQuery) {
+                    resolvedComponents.append(["name": matchedComponent])
+                } else {
+                    resolvedComponents.append(["name": componentQuery])
+                    Logger.shared.warning("Could not find component matching '\(componentQuery)', using as-is")
+                }
+            }
+            jiraFields["components"] = resolvedComponents
         }
 
         let requestBody: [String: Any] = ["fields": jiraFields]
@@ -1170,6 +1219,51 @@ class JiraService: ObservableObject {
         }
 
         Logger.shared.warning("No epic match found for query: '\(query)'")
+        return nil
+    }
+
+    func findComponentByName(_ query: String) async -> String? {
+        let components = await MainActor.run { self.availableComponents }
+        let lowercaseQuery = query.lowercased()
+
+        Logger.shared.info("Searching for component matching query: '\(query)'")
+        Logger.shared.info("Available components: \(components.sorted().joined(separator: ", "))")
+
+        // First try exact match
+        if let exactMatch = components.first(where: { $0.lowercased() == lowercaseQuery }) {
+            Logger.shared.info("Found exact component match: \(exactMatch)")
+            return exactMatch
+        }
+
+        // Then try contains match
+        if let containsMatch = components.first(where: { $0.lowercased().contains(lowercaseQuery) }) {
+            Logger.shared.info("Found contains match: \(containsMatch)")
+            return containsMatch
+        }
+
+        // Finally try fuzzy match - find component name that contains most query words
+        let queryWords = lowercaseQuery.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
+        var bestMatch: String?
+        var bestScore = 0
+
+        for component in components {
+            let componentLower = component.lowercased()
+            let matchingWords = queryWords.filter { componentLower.contains($0) }
+            let score = matchingWords.count
+
+            if score > bestScore {
+                bestScore = score
+                bestMatch = component
+            }
+        }
+
+        // Only return if at least one word matched
+        if bestScore > 0 && bestMatch != nil {
+            Logger.shared.info("Found fuzzy component match: \(bestMatch!) (score: \(bestScore))")
+            return bestMatch
+        }
+
+        Logger.shared.warning("No component match found for query: '\(query)'")
         return nil
     }
 }

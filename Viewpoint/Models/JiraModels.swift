@@ -64,6 +64,7 @@ struct IssueFields: Codable, Hashable {
     let priority: PriorityField?
     let created: String?
     let updated: String?
+    let components: [ComponentField]?
     let customfield_10014: String? // Epic Link
     let customfield_10016: Double? // Story Points
     let customfield_10020: [SprintField]? // Sprint
@@ -74,6 +75,7 @@ struct IssueFields: Codable, Hashable {
     // Coding keys to handle optional fields
     enum CodingKeys: String, CodingKey {
         case summary, status, assignee, issuetype, project, priority, created, updated
+        case components
         case customfield_10014, customfield_10016, customfield_10020
         case timeoriginalestimate, timespent, timeestimate
     }
@@ -114,6 +116,10 @@ struct ProjectField: Codable, Hashable {
 struct PriorityField: Codable, Hashable {
     let name: String
     let iconUrl: String?
+}
+
+struct ComponentField: Codable, Hashable {
+    let name: String
 }
 
 // MARK: - Sprint Models
