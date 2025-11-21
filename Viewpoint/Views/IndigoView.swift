@@ -54,40 +54,6 @@ struct IndigoView: View {
 
             Spacer()
 
-            // Model Selector
-            Menu {
-                ForEach(AIModel.allCases) { model in
-                    Button(action: {
-                        viewModel.changeModel(model)
-                    }) {
-                        HStack {
-                            Text(model.displayName)
-                            if viewModel.selectedModel == model {
-                                Image(systemName: "checkmark")
-                            }
-                        }
-                    }
-                }
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "brain.head.profile")
-                        .font(.system(size: 14))
-                    Text(viewModel.selectedModel.displayName)
-                        .font(.system(size: 12))
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 10))
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(Color.accentColor.opacity(0.1))
-                .cornerRadius(6)
-            }
-            .menuStyle(.borderlessButton)
-            .help("Select AI model")
-
-            Spacer()
-                .frame(width: 12)
-
             // Controls
             HStack(spacing: 12) {
                 // Keep on Top toggle
@@ -169,62 +135,105 @@ struct IndigoView: View {
     }
 
     private var inputView: some View {
-        HStack(spacing: 12) {
-            // Microphone button
-            Button(action: { viewModel.toggleRecording() }) {
-                Image(systemName: viewModel.isRecording ? "mic.fill" : "mic")
-                    .font(.system(size: 18))
-                    .foregroundColor(viewModel.isRecording ? .red : .white)
-                    .frame(width: 36, height: 36)
-                    .background(
-                        Group {
-                            if viewModel.isRecording {
-                                Color.red.opacity(0.2)
-                            } else {
-                                LinearGradient(
+        VStack(spacing: 0) {
+            // Model Selector Row
+            HStack {
+                Menu {
+                    ForEach(AIModel.allCases) { model in
+                        Button(action: {
+                            viewModel.changeModel(model)
+                        }) {
+                            HStack {
+                                Text(model.displayName)
+                                if viewModel.selectedModel == model {
+                                    Image(systemName: "checkmark")
+                                }
+                            }
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "brain.head.profile")
+                            .font(.system(size: 12))
+                        Text(viewModel.selectedModel.displayName)
+                            .font(.system(size: 11))
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 9))
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.accentColor.opacity(0.1))
+                    .cornerRadius(4)
+                }
+                .menuStyle(.borderlessButton)
+                .help("Select AI model")
+
+                Spacer()
+            }
+            .padding(.horizontal, 12)
+            .padding(.top, 8)
+            .padding(.bottom, 4)
+
+            Divider()
+
+            // Input Row
+            HStack(spacing: 12) {
+                // Microphone button
+                Button(action: { viewModel.toggleRecording() }) {
+                    Image(systemName: viewModel.isRecording ? "mic.fill" : "mic")
+                        .font(.system(size: 18))
+                        .foregroundColor(viewModel.isRecording ? .red : .white)
+                        .frame(width: 36, height: 36)
+                        .background(
+                            Group {
+                                if viewModel.isRecording {
+                                    Color.red.opacity(0.2)
+                                } else {
+                                    LinearGradient(
+                                        colors: [Color(red: 0.31, green: 0.27, blue: 0.90), Color(red: 0.46, green: 0.39, blue: 1.0)],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                }
+                            }
+                        )
+                        .cornerRadius(18)
+                }
+                .buttonStyle(.plain)
+                .help("Voice input (Phase 2)")
+
+                // Text input
+                TextField("Type or speak your command...", text: $viewModel.inputText)
+                    .textFieldStyle(.plain)
+                    .font(.body)
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 12)
+                    .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+                    .cornerRadius(8)
+                    .onSubmit {
+                        viewModel.sendMessage()
+                    }
+
+                // Send button
+                Button(action: { viewModel.sendMessage() }) {
+                    Image(systemName: "arrow.up.circle.fill")
+                        .font(.system(size: 28))
+                        .foregroundStyle(
+                            viewModel.inputText.isEmpty
+                                ? LinearGradient(colors: [.gray], startPoint: .top, endPoint: .bottom)
+                                : LinearGradient(
                                     colors: [Color(red: 0.31, green: 0.27, blue: 0.90), Color(red: 0.46, green: 0.39, blue: 1.0)],
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
                                 )
-                            }
-                        }
-                    )
-                    .cornerRadius(18)
-            }
-            .buttonStyle(.plain)
-            .help("Voice input (Phase 2)")
-
-            // Text input
-            TextField("Type or speak your command...", text: $viewModel.inputText)
-                .textFieldStyle(.plain)
-                .font(.body)
-                .padding(.vertical, 8)
-                .padding(.horizontal, 12)
-                .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
-                .cornerRadius(8)
-                .onSubmit {
-                    viewModel.sendMessage()
+                        )
                 }
-
-            // Send button
-            Button(action: { viewModel.sendMessage() }) {
-                Image(systemName: "arrow.up.circle.fill")
-                    .font(.system(size: 28))
-                    .foregroundStyle(
-                        viewModel.inputText.isEmpty
-                            ? LinearGradient(colors: [.gray], startPoint: .top, endPoint: .bottom)
-                            : LinearGradient(
-                                colors: [Color(red: 0.31, green: 0.27, blue: 0.90), Color(red: 0.46, green: 0.39, blue: 1.0)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                    )
+                .buttonStyle(.plain)
+                .disabled(viewModel.inputText.isEmpty || viewModel.isProcessing)
+                .help("Send message (⏎)")
             }
-            .buttonStyle(.plain)
-            .disabled(viewModel.inputText.isEmpty || viewModel.isProcessing)
-            .help("Send message (⏎)")
+            .padding()
         }
-        .padding()
         .background(Color(NSColor.windowBackgroundColor).opacity(0.5))
     }
 }
