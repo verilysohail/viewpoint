@@ -1098,6 +1098,16 @@ class JiraService: ObservableObject {
                 }
             }
             jiraFields["components"] = resolvedComponents
+        } else {
+            // Default: try to find "Management Tasks" component
+            if let managementTasksComponent = await findComponentByName("Management Tasks") {
+                jiraFields["components"] = [["name": managementTasksComponent]]
+                Logger.shared.info("Using default component: \(managementTasksComponent)")
+            } else {
+                // Fallback to literal "Management Tasks" if not found in available components
+                jiraFields["components"] = [["name": "Management Tasks"]]
+                Logger.shared.warning("Management Tasks component not found in loaded issues, using literal value")
+            }
         }
 
         let requestBody: [String: Any] = ["fields": jiraFields]
