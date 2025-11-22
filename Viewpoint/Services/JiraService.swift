@@ -1182,31 +1182,32 @@ class JiraService: ObservableObject {
     }
 
     func findEpicByName(_ query: String) async -> String? {
+        // First, search in currently loaded epics
         let summaries = await MainActor.run { self.epicSummaries }
         let lowercaseQuery = query.lowercased()
 
         Logger.shared.info("Searching for epic matching query: '\(query)'")
-        Logger.shared.info("Available epics: \(summaries.map { "\($0.key): \($0.value)" }.joined(separator: ", "))")
+        Logger.shared.info("Available epics in loaded issues: \(summaries.map { "\($0.key): \($0.value)" }.joined(separator: ", "))")
 
         // First try exact match on epic key (e.g., "SETI-123")
         if let exactKey = summaries.keys.first(where: { $0.lowercased() == lowercaseQuery }) {
-            Logger.shared.info("Found exact key match: \(exactKey)")
+            Logger.shared.info("Found exact key match in loaded epics: \(exactKey)")
             return exactKey
         }
 
         // Then try exact match on summary
         if let exactSummary = summaries.first(where: { $0.value.lowercased() == lowercaseQuery }) {
-            Logger.shared.info("Found exact summary match: \(exactSummary.key)")
+            Logger.shared.info("Found exact summary match in loaded epics: \(exactSummary.key)")
             return exactSummary.key
         }
 
         // Try contains match on summary
         if let containsMatch = summaries.first(where: { $0.value.lowercased().contains(lowercaseQuery) }) {
-            Logger.shared.info("Found contains match: \(containsMatch.key) (\(containsMatch.value))")
+            Logger.shared.info("Found contains match in loaded epics: \(containsMatch.key) (\(containsMatch.value))")
             return containsMatch.key
         }
 
-        // Finally try fuzzy match - find epic summary that contains most query words
+        // Try fuzzy match on loaded epics
         let queryWords = lowercaseQuery.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
         var bestMatch: String?
         var bestScore = 0
@@ -1222,14 +1223,102 @@ class JiraService: ObservableObject {
             }
         }
 
-        // Only return if at least one word matched
         if bestScore > 0 && bestMatch != nil {
-            Logger.shared.info("Found fuzzy match: \(bestMatch!) (score: \(bestScore))")
+            Logger.shared.info("Found fuzzy match in loaded epics: \(bestMatch!) (score: \(bestScore))")
             return bestMatch
         }
 
-        Logger.shared.warning("No epic match found for query: '\(query)'")
-        return nil
+        // Not found in loaded epics - search ALL epics in the project
+        Logger.shared.info("Epic not found in loaded issues, searching all epics in project...")
+        return await searchAllEpicsInProject(query: query, queryWords: queryWords)
+    }
+
+    private func searchAllEpicsInProject(query: String, queryWords: [String]) async -> String? {
+        // Get the current project(s)
+        let projects = await MainActor.run { Array(self.filters.projects) }
+        guard !projects.isEmpty else {
+            Logger.shared.warning("No project selected, cannot search all epics")
+            return nil
+        }
+
+        // Build JQL to find all epics in the project
+        let projectList = projects.map { "\"\($0)\"" }.joined(separator: ", ")
+        let jql = "project IN (\(projectList)) AND type = Epic ORDER BY created DESC"
+
+        var components = URLComponents(string: "\(config.jiraBaseURL)/rest/api/3/search/jql")!
+        components.queryItems = [
+            URLQueryItem(name: "jql", value: jql),
+            URLQueryItem(name: "maxResults", value: "100"),
+            URLQueryItem(name: "fields", value: "summary")
+        ]
+
+        guard let url = components.url else {
+            Logger.shared.error("Invalid URL for epic search")
+            return nil
+        }
+
+        let request = createRequest(url: url)
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+                Logger.shared.error("Failed to fetch all epics")
+                return nil
+            }
+
+            let searchResponse = try JSONDecoder().decode(EpicSummaryResponse.self, from: data)
+            let allEpics = Dictionary(uniqueKeysWithValues: searchResponse.issues.map { ($0.key, $0.fields.summary) })
+
+            Logger.shared.info("Found \(allEpics.count) total epics in project")
+
+            let lowercaseQuery = query.lowercased()
+
+            // Try exact match on key
+            if let exactKey = allEpics.keys.first(where: { $0.lowercased() == lowercaseQuery }) {
+                Logger.shared.info("Found exact key match in all epics: \(exactKey)")
+                return exactKey
+            }
+
+            // Try exact match on summary
+            if let exactSummary = allEpics.first(where: { $0.value.lowercased() == lowercaseQuery }) {
+                Logger.shared.info("Found exact summary match in all epics: \(exactSummary.key)")
+                return exactSummary.key
+            }
+
+            // Try contains match
+            if let containsMatch = allEpics.first(where: { $0.value.lowercased().contains(lowercaseQuery) }) {
+                Logger.shared.info("Found contains match in all epics: \(containsMatch.key) (\(containsMatch.value))")
+                return containsMatch.key
+            }
+
+            // Try fuzzy match
+            var bestMatch: String?
+            var bestScore = 0
+
+            for (key, summary) in allEpics {
+                let summaryLower = summary.lowercased()
+                let matchingWords = queryWords.filter { summaryLower.contains($0) }
+                let score = matchingWords.count
+
+                if score > bestScore {
+                    bestScore = score
+                    bestMatch = key
+                }
+            }
+
+            if bestScore > 0 && bestMatch != nil {
+                Logger.shared.info("Found fuzzy match in all epics: \(bestMatch!) (score: \(bestScore))")
+                return bestMatch
+            }
+
+            Logger.shared.warning("No epic match found for query: '\(query)' even after searching all epics")
+            return nil
+
+        } catch {
+            Logger.shared.error("Error searching all epics: \(error)")
+            return nil
+        }
     }
 
     func findComponentByName(_ query: String) async -> String? {
