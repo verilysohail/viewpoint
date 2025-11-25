@@ -654,6 +654,18 @@ class JiraService: ObservableObject {
     }
 
     func updateIssue(issueKey: String, fields: [String: Any]) async -> Bool {
+        // Check if status change is requested - this needs special handling
+        if let newStatus = fields["status"] as? String {
+            // Extract resolution if provided
+            var fieldValues: [String: String] = [:]
+            if let resolution = fields["resolution"] as? String {
+                fieldValues["resolution"] = resolution
+            }
+
+            Logger.shared.info("Detected status change request for \(issueKey) to '\(newStatus)'")
+            return await updateIssueStatus(issueKey: issueKey, newStatus: newStatus, fieldValues: fieldValues)
+        }
+
         let urlString = "\(config.jiraBaseURL)/rest/api/3/issue/\(issueKey)"
 
         guard let url = URL(string: urlString) else {
@@ -670,6 +682,16 @@ class JiraService: ObservableObject {
         // Handle different field types
         for (key, value) in fields {
             switch key.lowercased() {
+            case "status":
+                // Already handled above
+                Logger.shared.warning("Status field should have been handled by transition API")
+                continue
+
+            case "resolution":
+                // Resolution is only set during transitions, not via update
+                Logger.shared.warning("Resolution can only be set during status transitions")
+                continue
+
             case "summary":
                 jiraFields["summary"] = value
 
