@@ -154,6 +154,7 @@ struct JiraSearchResponse: Codable {
     let issues: [JiraIssue]
     let total: Int?
     let maxResults: Int?
+    let nextPageToken: String?
 }
 
 struct JiraSprintResponse: Codable {

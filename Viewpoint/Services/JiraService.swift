@@ -12,7 +12,7 @@ class JiraService: ObservableObject {
 
     private let config = Configuration.shared
     private var cancellables = Set<AnyCancellable>()
-    private var currentStartAt: Int = 0
+    private var currentPageToken: String? = nil
 
     // User-configurable initial load count
     private var initialLoadCount: Int {
@@ -97,7 +97,7 @@ class JiraService: ObservableObject {
         // Reset pagination state when fetching fresh
         await MainActor.run {
             isLoading = true
-            currentStartAt = 0
+            currentPageToken = nil
             issues = []
         }
 
@@ -110,28 +110,33 @@ class JiraService: ObservableObject {
         let jql = filters.buildJQL(userEmail: config.jiraEmail)
 
         let maxResults = 100
-        let currentStart = await MainActor.run { currentStartAt }
+        let isInitialFetch = await MainActor.run { currentPageToken == nil && issues.isEmpty }
         var allIssues: [JiraIssue] = await MainActor.run { issues }
-        var startAt = currentStart
-        let fetchLimit = currentStart == 0 ? initialFetchLimit : 500 // Initial fetch or subsequent "Load more"
-        var total = 0
+        var pageToken = await MainActor.run { currentPageToken }
+        let fetchLimit = isInitialFetch ? initialFetchLimit : 500 // Initial fetch or subsequent "Load more"
 
         do {
             Logger.shared.info("JQL: \(jql)")
-            Logger.shared.info("Starting at: \(startAt), will fetch up to \(fetchLimit) more issues")
+            Logger.shared.info("Fetching up to \(fetchLimit) more issues, pageToken: \(pageToken ?? "none")")
 
             var fetchedInThisBatch = 0
-            var lastFetchWasFull = true
+            var nextToken: String? = pageToken
 
             repeat {
-                // Build URL with query parameters for the new /search/jql endpoint
+                // Build URL with query parameters for /search/jql endpoint
                 var components = URLComponents(string: "\(config.jiraBaseURL)/rest/api/3/search/jql")!
-                components.queryItems = [
+                var queryItems = [
                     URLQueryItem(name: "jql", value: jql),
-                    URLQueryItem(name: "startAt", value: String(startAt)),
                     URLQueryItem(name: "maxResults", value: String(maxResults)),
                     URLQueryItem(name: "fields", value: "summary,status,assignee,issuetype,project,priority,created,updated,components,customfield_10014,customfield_10016,customfield_10020,timeoriginalestimate,timespent,timeestimate")
                 ]
+
+                // Add nextPageToken if we have one (not on first page)
+                if let token = nextToken {
+                    queryItems.append(URLQueryItem(name: "nextPageToken", value: token))
+                }
+
+                components.queryItems = queryItems
 
                 guard let url = components.url else {
                     await MainActor.run {
@@ -152,7 +157,7 @@ class JiraService: ObservableObject {
                     throw URLError(.badServerResponse)
                 }
 
-                Logger.shared.info("Response status: \(httpResponse.statusCode) (fetching batch starting at \(startAt))")
+                Logger.shared.info("Response status: \(httpResponse.statusCode)")
 
                 if httpResponse.statusCode != 200 {
                     // Try to parse error message from response
@@ -165,30 +170,24 @@ class JiraService: ObservableObject {
 
                 let searchResponse = try JSONDecoder().decode(JiraSearchResponse.self, from: data)
 
-                // The new /search/jql API doesn't return a total field, so we need to infer if there are more issues
-                // by checking if we got a full page of results
+                // Append issues from this page
                 allIssues.append(contentsOf: searchResponse.issues)
-                startAt += searchResponse.issues.count
                 fetchedInThisBatch += searchResponse.issues.count
 
-                // If we got fewer issues than requested, we've reached the end
-                lastFetchWasFull = searchResponse.issues.count >= maxResults
+                // Get next page token from response
+                nextToken = searchResponse.nextPageToken
 
-                Logger.shared.info("Fetched \(searchResponse.issues.count) issues (loaded so far: \(allIssues.count), got full page: \(lastFetchWasFull))")
+                Logger.shared.info("Fetched \(searchResponse.issues.count) issues (loaded so far: \(allIssues.count), hasMore: \(nextToken != nil))")
 
-            } while fetchedInThisBatch < fetchLimit && lastFetchWasFull
+            } while fetchedInThisBatch < fetchLimit && nextToken != nil
 
-            // Since the API doesn't provide total, we estimate based on whether the last fetch was a full page
-            // If it was a full page, there might be more; otherwise, we've got everything
-            total = lastFetchWasFull ? allIssues.count + 1 : allIssues.count // +1 to indicate there might be more
-
-            Logger.shared.info("Successfully fetched \(allIssues.count) of \(total) total issues")
+            Logger.shared.info("Successfully fetched \(allIssues.count) total issues")
 
             await MainActor.run {
                 self.issues = allIssues
-                self.totalIssuesAvailable = total
-                self.hasMoreIssues = allIssues.count < total
-                self.currentStartAt = startAt
+                self.totalIssuesAvailable = allIssues.count // Can't know total with token-based pagination
+                self.hasMoreIssues = nextToken != nil
+                self.currentPageToken = nextToken
                 if updateAvailableOptions {
                     self.updateAvailableFilters()
                 }
@@ -197,7 +196,7 @@ class JiraService: ObservableObject {
             }
 
             // Fetch epic summaries for all epics in the result set (only on initial fetch)
-            if currentStart == 0 {
+            if isInitialFetch {
                 await fetchEpicSummaries()
             }
         } catch {
@@ -213,7 +212,7 @@ class JiraService: ObservableObject {
         // Reset pagination state when executing new search
         await MainActor.run {
             isLoading = true
-            currentStartAt = 0
+            currentPageToken = nil
             issues = []
         }
 
@@ -223,11 +222,10 @@ class JiraService: ObservableObject {
         do {
             Logger.shared.info("Executing JQL search: \(jql)")
 
-            // Build URL with query parameters
+            // Build URL with query parameters (no nextPageToken for first page)
             var components = URLComponents(string: "\(config.jiraBaseURL)/rest/api/3/search/jql")!
             components.queryItems = [
                 URLQueryItem(name: "jql", value: jql),
-                URLQueryItem(name: "startAt", value: "0"),
                 URLQueryItem(name: "maxResults", value: String(maxResults)),
                 URLQueryItem(name: "fields", value: "summary,status,assignee,issuetype,project,priority,created,updated,components,customfield_10014,customfield_10016,customfield_10020,timeoriginalestimate,timespent,timeestimate")
             ]
@@ -263,8 +261,8 @@ class JiraService: ObservableObject {
             await MainActor.run {
                 self.issues = allIssues
                 self.totalIssuesAvailable = allIssues.count
-                self.hasMoreIssues = false
-                self.currentStartAt = allIssues.count
+                self.hasMoreIssues = searchResponse.nextPageToken != nil
+                self.currentPageToken = searchResponse.nextPageToken
                 self.updateAvailableFilters()
                 self.isLoading = false
                 self.errorMessage = nil
