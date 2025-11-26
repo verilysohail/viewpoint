@@ -566,15 +566,12 @@ class JiraService: ObservableObject {
                     }
                 }
 
-                // Find the transition that matches the desired status
-                if let transition = transitions.first(where: { trans in
-                    if let to = trans["to"] as? [String: Any],
-                       let name = to["name"] as? String {
-                        return name.lowercased() == newStatus.lowercased()
-                    }
-                    return false
-                }),
-                   let transitionId = transition["id"] as? String {
+                // Find the best matching transition using smart matching
+                if let (matchedTransition, matchType) = findBestTransition(query: newStatus, transitions: transitions),
+                   let transitionId = matchedTransition["id"] as? String,
+                   let transitionName = matchedTransition["name"] as? String {
+
+                    Logger.shared.info("Matched '\(newStatus)' to transition '\(transitionName)' using \(matchType)")
 
                     // Execute the transition
                     var transitionRequest = createRequest(url: url)
@@ -610,12 +607,110 @@ class JiraService: ObservableObject {
                 }
             }
 
-            Logger.shared.warning("Could not find transition to status: \(newStatus)")
+            Logger.shared.warning("Could not find transition matching: \(newStatus)")
             return false
         } catch {
             Logger.shared.error("Failed to update issue status: \(error)")
             return false
         }
+    }
+
+    // MARK: - Smart Transition Matching
+
+    private func findBestTransition(query: String, transitions: [[String: Any]]) -> (transition: [String: Any], matchType: String)? {
+        let lowercaseQuery = query.lowercased()
+
+        // Build list of transitions with their names and target statuses
+        var transitionData: [(transition: [String: Any], name: String, targetStatus: String)] = []
+        for trans in transitions {
+            if let transName = trans["name"] as? String,
+               let to = trans["to"] as? [String: Any],
+               let toStatus = to["name"] as? String {
+                transitionData.append((trans, transName, toStatus))
+            }
+        }
+
+        // 1. Try exact match on target status
+        if let match = transitionData.first(where: { $0.targetStatus.lowercased() == lowercaseQuery }) {
+            return (match.transition, "exact status match")
+        }
+
+        // 2. Try exact match on transition name
+        if let match = transitionData.first(where: { $0.name.lowercased() == lowercaseQuery }) {
+            return (match.transition, "exact transition name match")
+        }
+
+        // 3. Try semantic/synonym matching
+        if let match = findSemanticTransitionMatch(query: lowercaseQuery, transitions: transitionData) {
+            return (match.transition, "semantic match")
+        }
+
+        // 4. Try contains match on target status
+        if let match = transitionData.first(where: { $0.targetStatus.lowercased().contains(lowercaseQuery) }) {
+            return (match.transition, "contains status match")
+        }
+
+        // 5. Try contains match on transition name
+        if let match = transitionData.first(where: { $0.name.lowercased().contains(lowercaseQuery) }) {
+            return (match.transition, "contains transition name match")
+        }
+
+        // 6. Try fuzzy word-based matching
+        let queryWords = lowercaseQuery.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
+        var bestMatch: (transition: [String: Any], name: String, targetStatus: String)?
+        var bestScore = 0
+
+        for transData in transitionData {
+            let statusWords = transData.targetStatus.lowercased().components(separatedBy: .whitespaces)
+            let nameWords = transData.name.lowercased().components(separatedBy: .whitespaces)
+
+            let statusMatches = queryWords.filter { word in statusWords.contains(where: { $0.contains(word) }) }.count
+            let nameMatches = queryWords.filter { word in nameWords.contains(where: { $0.contains(word) }) }.count
+            let score = statusMatches * 2 + nameMatches // Prioritize status matches
+
+            if score > bestScore {
+                bestScore = score
+                bestMatch = transData
+            }
+        }
+
+        if bestScore > 0, let match = bestMatch {
+            return (match.transition, "fuzzy match (score: \(bestScore))")
+        }
+
+        return nil
+    }
+
+    private func findSemanticTransitionMatch(query: String, transitions: [(transition: [String: Any], name: String, targetStatus: String)]) -> (transition: [String: Any], name: String, targetStatus: String)? {
+        // Define semantic groups for common status changes
+        let semanticGroups: [[String]] = [
+            ["done", "complete", "completed", "finish", "finished", "close", "closed", "resolve", "resolved"],
+            ["start", "started", "begin", "in progress", "inprogress", "working", "in-progress"],
+            ["cancel", "cancelled", "canceled", "reject", "rejected", "abort", "aborted"],
+            ["todo", "to do", "backlog", "open", "new"],
+            ["review", "in review", "reviewing", "code review"],
+            ["testing", "test", "qa", "quality assurance"],
+            ["blocked", "waiting", "on hold", "paused"]
+        ]
+
+        // Check if query matches any semantic group
+        for group in semanticGroups {
+            if group.contains(query) {
+                // Find transition where target status or name matches any word in the same group
+                for transData in transitions {
+                    let statusLower = transData.targetStatus.lowercased()
+                    let nameLower = transData.name.lowercased()
+
+                    for synonym in group {
+                        if statusLower.contains(synonym) || nameLower.contains(synonym) {
+                            return transData
+                        }
+                    }
+                }
+            }
+        }
+
+        return nil
     }
 
     func logWork(issueKey: String, timeSpentSeconds: Int) async -> Bool {
