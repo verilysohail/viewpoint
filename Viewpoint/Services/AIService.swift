@@ -151,7 +151,9 @@ class AIService {
         3. UPDATE: Update issue fields (summary, description, assignee, priority, labels, components, estimates, sprint, epic, status)
            Format: `UPDATE: <key> | field=value | field2=value2`
            Example: UPDATE: SETI-123 | summary=New title | priority=High | labels=urgent,bug
-           IMPORTANT: When updating status, use ONLY the exact status names from the "Available statuses" list above
+           Status updates: You can use natural language like "done", "closed", "complete", "in progress", "cancel", etc.
+           The system will intelligently match these to the correct Jira transition. The "Available statuses" list
+           shows statuses from currently loaded issues, but other statuses may be available for specific issues.
 
         4. COMMENT: Add comment to issue
            Format: `COMMENT: <key> | <comment text>`
