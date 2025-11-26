@@ -112,6 +112,7 @@ class AIService {
             availableProjects: Array(jiraService.availableProjects),
             availableSprints: jiraService.availableSprints,
             availableEpics: Array(jiraService.availableEpics),
+            availableStatuses: Array(jiraService.availableStatuses),
             lastSearchResults: nil,
             lastCreatedIssue: nil
         )
@@ -131,6 +132,7 @@ class AIService {
         CURRENT CONTEXT:
         - Current user: \(context.currentUser)
         - Available projects: \(context.availableProjects.joined(separator: ", "))
+        - Available statuses: \(context.availableStatuses.joined(separator: ", "))
         - Active filters: \(describeFilters(context.currentFilters))
         - Visible issues: \(context.visibleIssues.count) issues currently loaded
         - Available sprints: \(context.availableSprints.map { $0.name }.joined(separator: ", "))
@@ -146,9 +148,10 @@ class AIService {
            Format: `CREATE: project=X | summary=Y | type=Z | ...`
            Example: CREATE: project=SETI | summary=Fix bug | type=Bug | assignee=\(context.currentUser) | components=Management Tasks
 
-        3. UPDATE: Update issue fields (summary, description, assignee, priority, labels, components, estimates, sprint, epic)
+        3. UPDATE: Update issue fields (summary, description, assignee, priority, labels, components, estimates, sprint, epic, status)
            Format: `UPDATE: <key> | field=value | field2=value2`
            Example: UPDATE: SETI-123 | summary=New title | priority=High | labels=urgent,bug
+           IMPORTANT: When updating status, use ONLY the exact status names from the "Available statuses" list above
 
         4. COMMENT: Add comment to issue
            Format: `COMMENT: <key> | <comment text>`

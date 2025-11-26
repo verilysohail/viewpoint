@@ -556,6 +556,16 @@ class JiraService: ObservableObject {
             if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                let transitions = json["transitions"] as? [[String: Any]] {
 
+                // Log available transitions for debugging
+                Logger.shared.info("Available transitions for \(issueKey):")
+                for trans in transitions {
+                    if let transName = trans["name"] as? String,
+                       let to = trans["to"] as? [String: Any],
+                       let toStatus = to["name"] as? String {
+                        Logger.shared.info("  - Transition '\(transName)' -> Status '\(toStatus)'")
+                    }
+                }
+
                 // Find the transition that matches the desired status
                 if let transition = transitions.first(where: { trans in
                     if let to = trans["to"] as? [String: Any],

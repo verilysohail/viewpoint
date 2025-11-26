@@ -81,6 +81,7 @@ struct AIContext {
     let availableProjects: [String]
     let availableSprints: [JiraSprint]
     let availableEpics: [String]
+    let availableStatuses: [String]
     let lastSearchResults: [JiraIssue]?
     let lastCreatedIssue: String?
 }
