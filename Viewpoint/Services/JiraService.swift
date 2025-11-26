@@ -34,6 +34,9 @@ class JiraService: ObservableObject {
     // Current filters
     @Published var filters = IssueFilters()
 
+    // Current JQL query
+    @Published var currentJQL: String?
+
     init() {
         loadPersistedFilters()
         loadInitialData()
@@ -71,9 +74,18 @@ class JiraService: ObservableObject {
 
     func loadInitialData() {
         Task {
-            await fetchMyIssues()
-            // Note: Sprints are now populated from issue data in updateAvailableFilters()
-            // No need to fetch all sprints from all boards
+            // Only fetch metadata on initial load - no issues yet
+            // Issues will be fetched when user selects a project or executes JQL
+            Logger.shared.info("Loading initial data (projects and sprints only, no issues)")
+
+            async let projectsFetch = fetchAvailableProjects()
+            async let sprintsFetch = fetchSprints()
+
+            // Wait for filter options to load
+            await projectsFetch
+            await sprintsFetch
+
+            Logger.shared.info("Initial data loaded successfully")
         }
     }
 
@@ -209,6 +221,16 @@ class JiraService: ObservableObject {
     }
 
     func searchWithJQL(_ jql: String) async {
+        // Update current JQL
+        await MainActor.run {
+            self.currentJQL = jql
+        }
+
+        // Parse JQL and update filter selections to match the query
+        await MainActor.run {
+            self.parseAndApplyJQLToFilters(jql)
+        }
+
         // Reset pagination state when executing new search
         await MainActor.run {
             isLoading = true
@@ -280,6 +302,146 @@ class JiraService: ObservableObject {
         }
     }
 
+    // MARK: - JQL Parsing
+
+    private func parseAndApplyJQLToFilters(_ jql: String) {
+        Logger.shared.info("Parsing JQL to update filter selections: \(jql)")
+
+        // Reset filters before parsing
+        filters.projects = []
+        filters.statuses = []
+        filters.assignees = []
+        filters.issueTypes = []
+        filters.epics = []
+        filters.sprints = []
+        filters.showOnlyMyIssues = false
+
+        let lowercaseJQL = jql.lowercased()
+
+        // Parse project filter: project IN ("Project1", "Project2") or project = "Project1"
+        if let projects = parseJQLList(jql: jql, field: "project") {
+            filters.projects = Set(projects)
+            Logger.shared.info("Parsed projects: \(projects)")
+        }
+
+        // Parse status filter: status IN ("Done", "In Progress")
+        if let statuses = parseJQLList(jql: jql, field: "status") {
+            filters.statuses = Set(statuses)
+            Logger.shared.info("Parsed statuses: \(statuses)")
+        }
+
+        // Parse assignee filter: assignee IN ("User1", "User2") or assignee = currentUser()
+        if lowercaseJQL.contains("assignee = currentuser()") {
+            filters.showOnlyMyIssues = true
+            Logger.shared.info("Parsed assignee: currentUser() - setting showOnlyMyIssues = true")
+        } else if let assignees = parseJQLList(jql: jql, field: "assignee") {
+            filters.assignees = Set(assignees)
+            filters.showOnlyMyIssues = false
+            Logger.shared.info("Parsed assignees: \(assignees)")
+        }
+
+        // Parse issue type filter: type IN ("Bug", "Story") or issuetype IN (...)
+        if let types = parseJQLList(jql: jql, field: "type") {
+            filters.issueTypes = Set(types)
+            Logger.shared.info("Parsed issue types: \(types)")
+        } else if let types = parseJQLList(jql: jql, field: "issuetype") {
+            filters.issueTypes = Set(types)
+            Logger.shared.info("Parsed issue types (from issuetype): \(types)")
+        }
+
+        // Parse epic filter: "Epic Link" IN ("EPIC-123") or customfield_10014 IN (...)
+        if let epics = parseJQLList(jql: jql, field: "epic link") {
+            filters.epics = Set(epics)
+            Logger.shared.info("Parsed epics: \(epics)")
+        } else if let epics = parseJQLList(jql: jql, field: "customfield_10014") {
+            filters.epics = Set(epics)
+            Logger.shared.info("Parsed epics (from customfield): \(epics)")
+        }
+
+        // Parse sprint filter: sprint IN (123, 456)
+        if let sprintStrings = parseJQLList(jql: jql, field: "sprint") {
+            let sprintIds = sprintStrings.compactMap { Int($0) }
+            filters.sprints = Set(sprintIds)
+            Logger.shared.info("Parsed sprints: \(sprintIds)")
+        }
+
+        // Save the updated filters
+        saveFilters()
+    }
+
+    private func parseJQLList(jql: String, field: String) -> [String]? {
+        let lowercaseJQL = jql.lowercased()
+        let lowercaseField = field.lowercased()
+
+        // Pattern 1: field IN ("value1", "value2", "value3")
+        // Pattern 2: field IN (value1, value2, value3) - for numbers/unquoted values
+        // Pattern 3: field = "value"
+        // Pattern 4: "field with spaces" IN (...)
+
+        // Try to find the field in the JQL
+        guard let fieldRange = lowercaseJQL.range(of: lowercaseField) else {
+            return nil
+        }
+
+        // Get the substring starting from the field
+        let startIndex = fieldRange.upperBound
+        let substring = String(jql[startIndex...])
+
+        // Check if it's an IN clause
+        if let inRange = substring.range(of: "IN", options: [.caseInsensitive]) {
+            let afterIn = String(substring[inRange.upperBound...])
+
+            // Find the opening parenthesis
+            guard let openParen = afterIn.firstIndex(of: "(") else {
+                return nil
+            }
+
+            // Find the matching closing parenthesis
+            guard let closeParen = afterIn.firstIndex(of: ")") else {
+                return nil
+            }
+
+            // Extract the content between parentheses
+            let startIdx = afterIn.index(after: openParen)
+            let content = String(afterIn[startIdx..<closeParen])
+
+            // Split by commas and clean up quotes and whitespace
+            let values = content.components(separatedBy: ",").map { value in
+                value.trimmingCharacters(in: .whitespaces)
+                    .trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
+                    .trimmingCharacters(in: .whitespaces)
+            }.filter { !$0.isEmpty }
+
+            return values.isEmpty ? nil : values
+
+        } else if let eqRange = substring.range(of: "=", options: [.caseInsensitive]) {
+            // Handle field = "value"
+            let afterEq = String(substring[eqRange.upperBound...])
+
+            // Extract the value (handle both quoted and unquoted)
+            let trimmed = afterEq.trimmingCharacters(in: .whitespaces)
+
+            // Find the end of the value (either next AND/OR or end of string)
+            var value = trimmed
+            if let andRange = trimmed.range(of: " AND ", options: [.caseInsensitive]) {
+                value = String(trimmed[..<andRange.lowerBound])
+            } else if let orRange = trimmed.range(of: " OR ", options: [.caseInsensitive]) {
+                value = String(trimmed[..<orRange.lowerBound])
+            } else if let orderRange = trimmed.range(of: " ORDER BY ", options: [.caseInsensitive]) {
+                value = String(trimmed[..<orderRange.lowerBound])
+            }
+
+            // Clean up quotes and whitespace
+            let cleanValue = value.trimmingCharacters(in: .whitespaces)
+                .trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
+                .trimmingCharacters(in: .whitespaces)
+
+            return cleanValue.isEmpty ? nil : [cleanValue]
+        }
+
+        return nil
+    }
+
     func fetchSprints() async {
         let urlString = "\(config.jiraBaseURL)/rest/agile/1.0/board"
 
@@ -313,6 +475,7 @@ class JiraService: ObservableObject {
 
                 await MainActor.run {
                     self.sprints = uniqueSprints
+                    self.availableSprints = uniqueSprints // Also populate available sprints for filters
                     if let activeSprint = uniqueSprints.first(where: { $0.state == "active" }) {
                         Task {
                             await self.fetchSprintInfo(sprintId: activeSprint.id)
@@ -322,6 +485,44 @@ class JiraService: ObservableObject {
             }
         } catch {
             Logger.shared.error("Failed to fetch boards: \(error)")
+        }
+    }
+
+    func fetchAvailableProjects() async {
+        let urlString = "\(config.jiraBaseURL)/rest/api/3/project"
+
+        guard let url = URL(string: urlString) else { return }
+
+        let request = createRequest(url: url)
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw URLError(.badServerResponse)
+            }
+
+            Logger.shared.info("Fetch projects response status: \(httpResponse.statusCode)")
+
+            if httpResponse.statusCode != 200 {
+                if let errorMessage = String(data: data, encoding: .utf8) {
+                    Logger.shared.error("Error fetching projects: \(errorMessage)")
+                }
+                return
+            }
+
+            // Parse projects
+            if let projects = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
+                let projectNames = projects.compactMap { $0["name"] as? String }
+
+                Logger.shared.info("Found \(projectNames.count) accessible projects")
+
+                await MainActor.run {
+                    self.availableProjects = Set(projectNames)
+                }
+            }
+        } catch {
+            Logger.shared.error("Failed to fetch projects: \(error)")
         }
     }
 
@@ -430,8 +631,11 @@ class JiraService: ObservableObject {
         availableStatuses = Set(issues.map { $0.status })
         availableAssignees = Set(issues.compactMap { $0.assignee })
         availableIssueTypes = Set(issues.map { $0.issueType })
-        availableProjects = Set(issues.map { $0.project })
         availableEpics = Set(issues.compactMap { $0.epic })
+
+        // Merge projects from issues with independently fetched projects
+        let projectsFromIssues = Set(issues.map { $0.project })
+        availableProjects = availableProjects.union(projectsFromIssues)
 
         // Extract unique components from issues
         var componentSet: Set<String> = []
@@ -444,8 +648,8 @@ class JiraService: ObservableObject {
         }
         availableComponents = componentSet
 
-        // Extract unique sprints from issues
-        var sprintMap: [Int: JiraSprint] = [:]
+        // Merge sprints from issues with independently fetched sprints
+        var sprintMap: [Int: JiraSprint] = Dictionary(uniqueKeysWithValues: availableSprints.map { ($0.id, $0) })
         for issue in issues {
             if let sprints = issue.fields.customfield_10020 {
                 for sprintField in sprints {

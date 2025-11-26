@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A6BACF672ED7C002000A4D2B /* JQLAutocomplete.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6BACF662ED7C002000A4D2B /* JQLAutocomplete.swift */; };
+		A6BACF692ED7C013000A4D2B /* JQLBuilderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6BACF682ED7C013000A4D2B /* JQLBuilderView.swift */; };
 		A6CBA4BA2ED0395200528322 /* WhisperService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6CBA4B92ED0395200528322 /* WhisperService.swift */; };
 		A6CBA4BB2ED0395200528322 /* AudioRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6CBA4B82ED0395200528322 /* AudioRecorder.swift */; };
 		A6CBA4BD2ED0395F00528322 /* IndigoModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6CBA4BC2ED0395F00528322 /* IndigoModels.swift */; };
@@ -30,6 +32,8 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		A6BACF662ED7C002000A4D2B /* JQLAutocomplete.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JQLAutocomplete.swift; sourceTree = "<group>"; };
+		A6BACF682ED7C013000A4D2B /* JQLBuilderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JQLBuilderView.swift; sourceTree = "<group>"; };
 		A6CBA4B82ED0395200528322 /* AudioRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioRecorder.swift; sourceTree = "<group>"; };
 		A6CBA4B92ED0395200528322 /* WhisperService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhisperService.swift; sourceTree = "<group>"; };
 		A6CBA4BC2ED0395F00528322 /* IndigoModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IndigoModels.swift; sourceTree = "<group>"; };
@@ -102,6 +106,7 @@
 		FF0002 /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				A6BACF662ED7C002000A4D2B /* JQLAutocomplete.swift */,
 				BB0003 /* JiraModels.swift */,
 				A6CBA4BC2ED0395F00528322 /* IndigoModels.swift */,
 			);
@@ -124,6 +129,7 @@
 		FF0004 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				A6BACF682ED7C013000A4D2B /* JQLBuilderView.swift */,
 				BB0005 /* FilterPanel.swift */,
 				BB0006 /* SprintInfoView.swift */,
 				BB0011 /* PersistentSplitView.swift */,
@@ -226,6 +232,7 @@
 				AA0002 /* ContentView.swift in Sources */,
 				AA0003 /* JiraModels.swift in Sources */,
 				A6CBA4BD2ED0395F00528322 /* IndigoModels.swift in Sources */,
+				A6BACF692ED7C013000A4D2B /* JQLBuilderView.swift in Sources */,
 				AA0004 /* JiraService.swift in Sources */,
 				AA0005 /* FilterPanel.swift in Sources */,
 				A6CBA4C02ED0397500528322 /* IndigoViewModel.swift in Sources */,
@@ -239,6 +246,7 @@
 				A6CBA4BA2ED0395200528322 /* WhisperService.swift in Sources */,
 				A6CBA4CA2ED03EF400528322 /* VertexAIClient.swift in Sources */,
 				A6CBA4CB2ED03EF400528322 /* AIService.swift in Sources */,
+				A6BACF672ED7C002000A4D2B /* JQLAutocomplete.swift in Sources */,
 				A6CBA4BB2ED0395200528322 /* AudioRecorder.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

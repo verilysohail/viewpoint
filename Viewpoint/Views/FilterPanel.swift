@@ -7,6 +7,20 @@ struct FilterPanel: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
+                // JQL Builder
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("JQL Query")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 12)
+
+                    JQLBuilderView(jiraService: jiraService)
+                        .padding(.horizontal, 12)
+                }
+                .padding(.vertical, 12)
+
+                Divider()
+
                 // Show only my issues toggle and filter controls
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
