@@ -30,7 +30,10 @@ class ViewsManager: ObservableObject {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.clearCurrentView()
+            // Defer the state update to avoid modifying @Published during view updates
+            DispatchQueue.main.async {
+                self?.clearCurrentView()
+            }
         }
     }
 
