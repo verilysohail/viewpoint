@@ -457,6 +457,8 @@ struct IssueListView: View {
 struct IssueRow: View {
     let issue: JiraIssue
     @Environment(\.textSizeMultiplier) var textSizeMultiplier
+    @Environment(\.openWindow) private var openWindow
+    @EnvironmentObject var jiraService: JiraService
     @State private var showingLogWork = false
 
     private func scaledFont(_ textStyle: Font.TextStyle) -> Font {
@@ -484,6 +486,22 @@ struct IssueRow: View {
         guard let url = issueURL else { return }
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(url.absoluteString, forType: .string)
+    }
+
+    private func openDetailWindow() {
+        openWindow(value: issue.key)
+    }
+
+    private func openAllSelectedDetailWindows() {
+        // Get all selected issues
+        let selectedIssues = jiraService.selectedIssues.compactMap { selectedID in
+            jiraService.issues.first { $0.id == selectedID }
+        }
+
+        // Open a detail window for each
+        for issue in selectedIssues {
+            openWindow(value: issue.key)
+        }
     }
 
     var body: some View {
@@ -580,9 +598,22 @@ struct IssueRow: View {
         }
         .padding(.vertical, 4)
         .onTapGesture(count: 2) {
-            openInBrowser()
+            openDetailWindow()
         }
         .contextMenu {
+            // Show "Open All" if multiple issues selected
+            if jiraService.selectedIssues.count > 1 {
+                Button(action: openAllSelectedDetailWindows) {
+                    Label("Open All (\(jiraService.selectedIssues.count))", systemImage: "doc.on.doc")
+                }
+
+                Divider()
+            }
+
+            Button(action: openInBrowser) {
+                Label("Open in Jira", systemImage: "safari")
+            }
+
             Button(action: copyLink) {
                 Label("Copy Link", systemImage: "link")
             }

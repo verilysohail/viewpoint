@@ -81,20 +81,24 @@ struct IssueDetailView: View {
                 Text("History").tag(2)
             }
             .pickerStyle(.segmented)
-            .padding()
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+
+            Divider()
 
             // Content based on selected tab
-            TabView(selection: $selectedTab) {
-                detailsTab
-                    .tag(0)
-
-                commentsTab
-                    .tag(1)
-
-                historyTab
-                    .tag(2)
+            Group {
+                switch selectedTab {
+                case 0:
+                    detailsTab
+                case 1:
+                    commentsTab
+                case 2:
+                    historyTab
+                default:
+                    detailsTab
+                }
             }
-            .tabViewStyle(.automatic)
         }
         .frame(minWidth: 600, minHeight: 500)
     }
@@ -224,7 +228,8 @@ struct IssueDetailView: View {
                     .font(.system(size: 12))
                 }
             }
-            .padding()
+            .padding(.horizontal, 12)
+            .padding(.top, 12)
         }
     }
 
@@ -247,7 +252,8 @@ struct IssueDetailView: View {
                         CommentView(comment: comment)
                     }
                 }
-                .padding()
+                .padding(.horizontal, 12)
+                .padding(.top, 12)
             }
         }
     }
@@ -260,7 +266,9 @@ struct IssueDetailView: View {
                     .foregroundColor(.primary)
                     .textSelection(.enabled)
             }
-            .padding()
+            .padding(.horizontal, 12)
+            .padding(.top, 12)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
