@@ -62,7 +62,9 @@ class JiraService: ObservableObject {
     }
 
     init() {
-        loadPersistedFilters()
+        // Don't auto-load persisted filters on startup - users should use saved views instead
+        // Initialize previous projects to empty to avoid false change detection
+        previousProjects = filters.projects
         loadInitialData()
     }
 
@@ -696,7 +698,7 @@ class JiraService: ObservableObject {
     // Track previous project selection to detect changes
     private var previousProjects: Set<String> = []
 
-    func applyFilters(updateOptions: Bool = false) {
+    func applyFilters(updateOptions: Bool = false, fromSavedView: Bool = false) {
         saveFilters()
 
         // Auto-detect if projects changed - if so, update options to populate filters
@@ -705,6 +707,11 @@ class JiraService: ObservableObject {
 
         if projectsChanged {
             previousProjects = filters.projects
+        }
+
+        // Clear current view tracking if this is a manual filter change (not from applying a saved view)
+        if !fromSavedView {
+            NotificationCenter.default.post(name: NSNotification.Name("ClearCurrentView"), object: nil)
         }
 
         Task {

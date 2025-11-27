@@ -2,6 +2,28 @@
 
 All notable changes to Viewpoint will be documented in this file.
 
+## [2.0 Beta 3] - 2025-11-26
+
+### Added
+- **🎨 Saved Views** - Save and restore filter configurations with named views
+  - Save current filter settings as named views (up to 20 views)
+  - Quick access via Views menu in main toolbar
+  - Manage views: rename and delete saved views
+  - Views automatically track which one is currently active
+  - Manual filter changes clear current view to avoid confusion
+
+### Changed
+- **Filter Persistence** - Removed automatic filter restoration on app startup
+  - Filters no longer automatically restore from previous session
+  - Use saved views to preserve and restore filter configurations
+  - Fixes confusion when app restarts with unexpected filters applied
+
+### Fixed
+- **Double-Click Behavior** - Issue rows now open detail windows instead of browser
+  - Double-click on issue row opens Mac-native detail window
+  - "Open in Jira" moved to context menu only
+  - Multi-select context menu shows "Open All (N)" option
+
 ## [2.0 Beta 2] - 2025-11-26
 
 ### Added

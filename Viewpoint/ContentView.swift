@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject var jiraService: JiraService
+    @EnvironmentObject var viewsManager: ViewsManager
     @Environment(\.openWindow) private var openWindow
     @AppStorage("showFilters") private var showFilters: Bool = true
     @AppStorage("sortOption") private var sortOptionRaw: String = "dateCreated"
@@ -10,6 +11,9 @@ struct ContentView: View {
     @AppStorage("textSize") private var textSize: Double = 1.0
     @AppStorage("filterPanelHeight") private var filterPanelHeight: Double = 200
     @State private var showingLogWorkForSelected = false
+    @State private var showingSaveViewDialog = false
+    @State private var showingManageViewsSheet = false
+    @State private var newViewName = ""
     @AppStorage("colorScheme") private var colorSchemePreference: String = "auto"
     @State private var searchText: String = ""
     @FocusState private var isSearchFocused: Bool
@@ -256,11 +260,71 @@ struct ContentView: View {
                 LogWorkView(issue: issue, isPresented: $showingLogWorkForSelected)
             }
         }
+        .sheet(isPresented: $showingSaveViewDialog) {
+            SaveViewDialog(
+                viewName: $newViewName,
+                isPresented: $showingSaveViewDialog,
+                onSave: { name in
+                    let currentFilters = PersistedFilters(
+                        projects: Array(jiraService.filters.projects),
+                        statuses: Array(jiraService.filters.statuses),
+                        assignees: Array(jiraService.filters.assignees),
+                        issueTypes: Array(jiraService.filters.issueTypes),
+                        epics: Array(jiraService.filters.epics),
+                        sprints: Array(jiraService.filters.sprints),
+                        showOnlyMyIssues: jiraService.filters.showOnlyMyIssues
+                    )
+
+                    if viewsManager.addView(name: name, filters: currentFilters) {
+                        showingSaveViewDialog = false
+                    }
+                }
+            )
+        }
+        .sheet(isPresented: $showingManageViewsSheet) {
+            ManageViewsSheet(isPresented: $showingManageViewsSheet)
+                .environmentObject(viewsManager)
+        }
         .toolbar(id: "mainToolbar") {
             ToolbarItem(id: "toggleFilters", placement: .navigation, showsByDefault: true) {
                 Button(action: { showFilters.toggle() }) {
                     Image(systemName: showFilters ? "chevron.up" : "chevron.down")
                 }
+            }
+
+            ToolbarItem(id: "views", placement: .automatic, showsByDefault: true) {
+                Menu {
+                    // List saved views
+                    if !viewsManager.savedViews.isEmpty {
+                        ForEach(viewsManager.savedViews) { view in
+                            Button(action: {
+                                viewsManager.applyView(view, to: jiraService)
+                            }) {
+                                HStack {
+                                    Text(view.name)
+                                    if viewsManager.currentViewID == view.id {
+                                        Image(systemName: "checkmark")
+                                    }
+                                }
+                            }
+                        }
+
+                        Divider()
+                    }
+
+                    Button("Save Current View...") {
+                        newViewName = ""
+                        showingSaveViewDialog = true
+                    }
+
+                    Button("Manage Views...") {
+                        showingManageViewsSheet = true
+                    }
+                    .disabled(viewsManager.savedViews.isEmpty)
+                } label: {
+                    Label("Views", systemImage: "rectangle.stack")
+                }
+                .help("Manage saved filter views")
             }
 
             ToolbarItem(id: "logWork", placement: .automatic, showsByDefault: true) {

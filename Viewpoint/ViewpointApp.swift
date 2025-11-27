@@ -3,12 +3,14 @@ import SwiftUI
 @main
 struct ViewpointApp: App {
     @StateObject private var jiraService = JiraService()
+    @StateObject private var viewsManager = ViewsManager()
     @AppStorage("hasCompletedSetup") private var hasCompletedSetup = false
 
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environmentObject(jiraService)
+                .environmentObject(viewsManager)
                 .frame(minWidth: 1000, minHeight: 600)
                 .onAppear {
                     checkFirstRun()
