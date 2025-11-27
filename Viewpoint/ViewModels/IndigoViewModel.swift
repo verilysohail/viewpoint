@@ -129,8 +129,8 @@ class IndigoViewModel: ObservableObject {
                             )
                         }
 
-                        // Execute any Jira operations from the intent
-                        if let intent = response.intent {
+                        // Execute any Jira operations from the intents
+                        for intent in response.intents {
                             self.executeIntent(intent)
                         }
 

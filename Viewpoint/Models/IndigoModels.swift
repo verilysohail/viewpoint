@@ -90,7 +90,7 @@ struct AIContext {
 
 struct AIResponse {
     let text: String
-    let intent: Intent?
+    let intents: [Intent]
     let inputTokens: Int
     let outputTokens: Int
 

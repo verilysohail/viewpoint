@@ -86,7 +86,7 @@ class AIService {
                 case .success(let usage):
                     let response = AIResponse(
                         text: fullResponse,
-                        intent: self.parseIntent(from: fullResponse),
+                        intents: self.parseIntents(from: fullResponse),
                         inputTokens: usage.inputTokens,
                         outputTokens: usage.outputTokens
                     )
@@ -231,9 +231,10 @@ class AIService {
 
     // MARK: - Intent Parsing
 
-    private func parseIntent(from response: String) -> AIResponse.Intent? {
+    private func parseIntents(from response: String) -> [AIResponse.Intent] {
         // Look for special format markers in the response
         let lines = response.components(separatedBy: "\n")
+        var intents: [AIResponse.Intent] = []
 
         for line in lines {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
@@ -241,7 +242,8 @@ class AIService {
             // JQL Search
             if trimmed.hasPrefix("JQL:") {
                 let jql = trimmed.replacingOccurrences(of: "JQL:", with: "").trimmingCharacters(in: .whitespaces)
-                return .search(jql: jql)
+                intents.append(.search(jql: jql))
+                continue
             }
 
             // Update
@@ -262,7 +264,8 @@ class AIService {
                     }
                 }
 
-                return .update(issueKey: issueKey, fields: fields)
+                intents.append(.update(issueKey: issueKey, fields: fields))
+                continue
             }
 
             // Create
@@ -280,7 +283,8 @@ class AIService {
                     }
                 }
 
-                return .create(fields: fields)
+                intents.append(.create(fields: fields))
+                continue
             }
 
             // Log work
@@ -296,9 +300,10 @@ class AIService {
                 if let timePart = parts.first(where: { $0.hasPrefix("time=") }) {
                     let timeString = timePart.replacingOccurrences(of: "time=", with: "")
                     if let seconds = parseTimeString(timeString) {
-                        return .logWork(issueKey: issueKey, timeSeconds: seconds)
+                        intents.append(.logWork(issueKey: issueKey, timeSeconds: seconds))
                     }
                 }
+                continue
             }
 
             // Add comment
@@ -310,13 +315,15 @@ class AIService {
                 guard parts.count >= 2 else { continue }
                 let issueKey = parts[0]
                 let comment = parts[1]
-                return .addComment(issueKey: issueKey, comment: comment)
+                intents.append(.addComment(issueKey: issueKey, comment: comment))
+                continue
             }
 
             // Delete issue
             if trimmed.hasPrefix("DELETE:") {
                 let issueKey = trimmed.replacingOccurrences(of: "DELETE:", with: "").trimmingCharacters(in: .whitespaces)
-                return .deleteIssue(issueKey: issueKey)
+                intents.append(.deleteIssue(issueKey: issueKey))
+                continue
             }
 
             // Assign issue
@@ -328,7 +335,8 @@ class AIService {
                 guard parts.count >= 2 else { continue }
                 let issueKey = parts[0]
                 let assignee = parts[1]
-                return .assignIssue(issueKey: issueKey, assignee: assignee)
+                intents.append(.assignIssue(issueKey: issueKey, assignee: assignee))
+                continue
             }
 
             // Add watcher
@@ -340,7 +348,8 @@ class AIService {
                 guard parts.count >= 2 else { continue }
                 let issueKey = parts[0]
                 let watcher = parts[1]
-                return .addWatcher(issueKey: issueKey, watcher: watcher)
+                intents.append(.addWatcher(issueKey: issueKey, watcher: watcher))
+                continue
             }
 
             // Link issues
@@ -353,23 +362,26 @@ class AIService {
                 let issueKey = parts[0]
                 let linkedIssue = parts[1]
                 let linkType = parts[2]
-                return .linkIssues(issueKey: issueKey, linkedIssue: linkedIssue, linkType: linkType)
+                intents.append(.linkIssues(issueKey: issueKey, linkedIssue: linkedIssue, linkType: linkType))
+                continue
             }
 
             // Fetch changelog
             if trimmed.hasPrefix("CHANGELOG:") {
                 let issueKey = trimmed.replacingOccurrences(of: "CHANGELOG:", with: "").trimmingCharacters(in: .whitespaces)
-                return .fetchChangelog(issueKey: issueKey)
+                intents.append(.fetchChangelog(issueKey: issueKey))
+                continue
             }
 
             // Show issue detail
             if trimmed.hasPrefix("DETAIL:") {
                 let issueKey = trimmed.replacingOccurrences(of: "DETAIL:", with: "").trimmingCharacters(in: .whitespaces)
-                return .showIssueDetail(issueKey: issueKey)
+                intents.append(.showIssueDetail(issueKey: issueKey))
+                continue
             }
         }
 
-        return nil
+        return intents
     }
 
     private func parseTimeString(_ timeString: String) -> Int? {
