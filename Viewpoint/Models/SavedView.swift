@@ -1,6 +1,6 @@
 import Foundation
 
-struct SavedView: Identifiable, Codable, Equatable {
+struct SavedView: Identifiable, Codable {
     let id: UUID
     var name: String
     let filters: PersistedFilters
