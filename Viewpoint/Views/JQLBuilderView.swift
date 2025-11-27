@@ -6,7 +6,7 @@ struct JQLBuilderView: View {
     @State private var suggestions: [JQLSuggestion] = []
     @State private var showSuggestions: Bool = false
     @State private var selectedSuggestionIndex: Int = 0
-    @FocusState private var isFocused: Bool
+    @State private var isFocused: Bool = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -16,40 +16,39 @@ struct JQLBuilderView: View {
                     .foregroundColor(.secondary)
                     .font(.system(size: 14))
 
-                ZStack {
-                    TextField("Enter JQL query (e.g., project = \"SETI\" AND status != Done)", text: $jqlText)
-                        .textFieldStyle(.plain)
-                        .font(.system(size: 13, design: .monospaced))
-                        .focused($isFocused)
-                        .onChange(of: jqlText) { _ in
-                            updateSuggestions()
+                ArrowKeyTextField(
+                    text: $jqlText,
+                    placeholder: "Enter JQL query (e.g., project = \"SETI\" AND status != Done)",
+                    isFocused: $isFocused,
+                    showSuggestions: showSuggestions,
+                    selectedIndex: $selectedSuggestionIndex,
+                    suggestionsCount: suggestions.count,
+                    onTextChange: {
+                        updateSuggestions()
+                    },
+                    onUpArrow: {
+                        if showSuggestions && !suggestions.isEmpty {
+                            selectedSuggestionIndex = max(0, selectedSuggestionIndex - 1)
                         }
-                        .onSubmit {
-                            if showSuggestions && !suggestions.isEmpty {
-                                applySuggestion(suggestions[selectedSuggestionIndex])
-                            } else {
-                                executeSearch()
-                            }
+                    },
+                    onDownArrow: {
+                        if showSuggestions && !suggestions.isEmpty {
+                            selectedSuggestionIndex = min(suggestions.count - 1, selectedSuggestionIndex + 1)
                         }
-
-                    // Invisible overlay to capture key events
-                    KeyEventHandlingView(
-                        onUpArrow: {
-                            if showSuggestions && !suggestions.isEmpty {
-                                selectedSuggestionIndex = max(0, selectedSuggestionIndex - 1)
-                            }
-                        },
-                        onDownArrow: {
-                            if showSuggestions && !suggestions.isEmpty {
-                                selectedSuggestionIndex = min(suggestions.count - 1, selectedSuggestionIndex + 1)
-                            }
-                        },
-                        onEscape: {
-                            showSuggestions = false
-                            selectedSuggestionIndex = 0
+                    },
+                    onEscape: {
+                        showSuggestions = false
+                        selectedSuggestionIndex = 0
+                    },
+                    onSubmit: {
+                        if showSuggestions && !suggestions.isEmpty {
+                            applySuggestion(suggestions[selectedSuggestionIndex])
+                        } else {
+                            executeSearch()
                         }
-                    )
-                }
+                    }
+                )
+                .font(.system(size: 13, design: .monospaced))
 
                 if !jqlText.isEmpty {
                     Button(action: {
@@ -545,46 +544,141 @@ struct JQLBuilderView: View {
     }
 }
 
-// MARK: - Key Event Handling
+// MARK: - Arrow Key TextField
 
-struct KeyEventHandlingView: NSViewRepresentable {
+struct ArrowKeyTextField: NSViewRepresentable {
+    @Binding var text: String
+    let placeholder: String
+    @Binding var isFocused: Bool
+    let showSuggestions: Bool
+    @Binding var selectedIndex: Int
+    let suggestionsCount: Int
+    let onTextChange: () -> Void
     let onUpArrow: () -> Void
     let onDownArrow: () -> Void
     let onEscape: () -> Void
+    let onSubmit: () -> Void
 
-    func makeNSView(context: Context) -> NSView {
-        let view = KeyHandlerView()
-        view.onUpArrow = onUpArrow
-        view.onDownArrow = onDownArrow
-        view.onEscape = onEscape
-        return view
+    func makeNSView(context: Context) -> NSTextField {
+        let textField = CustomNSTextField()
+        textField.placeholderString = placeholder
+        textField.isBordered = false
+        textField.backgroundColor = .clear
+        textField.delegate = context.coordinator
+        textField.font = NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
+
+        // Set callbacks
+        textField.onUpArrow = onUpArrow
+        textField.onDownArrow = onDownArrow
+        textField.onEscape = onEscape
+        textField.onSubmit = onSubmit
+        textField.showSuggestions = { showSuggestions }
+
+        return textField
     }
 
-    func updateNSView(_ nsView: NSView, context: Context) {
-        if let view = nsView as? KeyHandlerView {
-            view.onUpArrow = onUpArrow
-            view.onDownArrow = onDownArrow
-            view.onEscape = onEscape
+    func updateNSView(_ nsView: NSTextField, context: Context) {
+        if nsView.stringValue != text {
+            nsView.stringValue = text
+        }
+
+        if let customField = nsView as? CustomNSTextField {
+            customField.onUpArrow = onUpArrow
+            customField.onDownArrow = onDownArrow
+            customField.onEscape = onEscape
+            customField.onSubmit = onSubmit
+            customField.showSuggestions = { showSuggestions }
+        }
+
+        // Handle focus
+        if isFocused && nsView.window?.firstResponder != nsView.currentEditor() {
+            nsView.window?.makeFirstResponder(nsView)
         }
     }
 
-    class KeyHandlerView: NSView {
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+
+    class Coordinator: NSObject, NSTextFieldDelegate {
+        var parent: ArrowKeyTextField
+
+        init(_ parent: ArrowKeyTextField) {
+            self.parent = parent
+        }
+
+        func controlTextDidChange(_ notification: Notification) {
+            if let textField = notification.object as? NSTextField {
+                parent.text = textField.stringValue
+                parent.onTextChange()
+            }
+        }
+
+        func controlTextDidBeginEditing(_ notification: Notification) {
+            parent.isFocused = true
+        }
+
+        func controlTextDidEndEditing(_ notification: Notification) {
+            parent.isFocused = false
+        }
+    }
+
+    class CustomNSTextField: NSTextField {
         var onUpArrow: (() -> Void)?
         var onDownArrow: (() -> Void)?
         var onEscape: (() -> Void)?
+        var onSubmit: (() -> Void)?
+        var showSuggestions: (() -> Bool)?
+        private var eventMonitor: Any?
 
-        override var acceptsFirstResponder: Bool { true }
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
 
-        override func keyDown(with event: NSEvent) {
-            switch event.keyCode {
-            case 126: // Up arrow
-                onUpArrow?()
-            case 125: // Down arrow
-                onDownArrow?()
-            case 53: // Escape
-                onEscape?()
-            default:
-                super.keyDown(with: event)
+            // Remove old monitor if exists
+            if let monitor = eventMonitor {
+                NSEvent.removeMonitor(monitor)
+                eventMonitor = nil
+            }
+
+            // Add local event monitor for arrow keys when we're in the window
+            if window != nil {
+                eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+                    guard let self = self else { return event }
+
+                    // Only handle if this text field is first responder
+                    guard self.window?.firstResponder == self.currentEditor() else {
+                        return event
+                    }
+
+                    switch event.keyCode {
+                    case 126: // Up arrow
+                        if self.showSuggestions?() == true {
+                            self.onUpArrow?()
+                            return nil // Consume the event
+                        }
+                    case 125: // Down arrow
+                        if self.showSuggestions?() == true {
+                            self.onDownArrow?()
+                            return nil // Consume the event
+                        }
+                    case 53: // Escape
+                        self.onEscape?()
+                        return nil
+                    case 36, 76: // Return or Enter
+                        self.onSubmit?()
+                        return nil
+                    default:
+                        break
+                    }
+
+                    return event
+                }
+            }
+        }
+
+        deinit {
+            if let monitor = eventMonitor {
+                NSEvent.removeMonitor(monitor)
             }
         }
     }
