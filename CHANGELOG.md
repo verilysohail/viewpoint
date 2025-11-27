@@ -2,6 +2,39 @@
 
 All notable changes to Viewpoint will be documented in this file.
 
+## [2.0 Beta 1] - 2025-11-26
+
+### What's New in 2.0
+
+**🚀 JQL Query Builder**
+- Build powerful Jira queries with intelligent autocomplete - no JQL knowledge required!
+- Type "pro" and see "project" appear, press space to see operators (=, !=, IN), press space again to see your actual projects
+- Navigate suggestions with arrow keys, select with Enter
+- Works seamlessly with Indigo AI - see and edit the exact queries Indigo creates
+- Color-coded suggestions help you understand what you're building
+
+**⚡ Faster Startup**
+- App now loads instantly - only fetches your projects and sprints on startup
+- Issues load when you select a project or run a query
+- Much more responsive, especially with large Jira instances
+
+**🤖 Smarter Indigo AI**
+- More natural status changes - just say "mark as done" or "move to in progress"
+- Better understanding of your requests with longer conversation context
+- Intelligent fuzzy matching finds the right status even if you're not exact
+- Improved issue creation and updates with smart component lookup
+
+**✨ Quality of Life**
+- All filter options now show everything you have access to, not just what's currently loaded
+- Better integration between filters and JQL queries
+- Cleaner, more intuitive workflow
+
+### Technical Improvements
+- Enhanced Jira REST API v3 integration with proper pagination
+- Improved status transition handling with better error messages
+- More comprehensive epic search across projects
+- Better logging for troubleshooting AI interactions
+
 ## [1.11] - 2025-11-20
 
 ### Added
