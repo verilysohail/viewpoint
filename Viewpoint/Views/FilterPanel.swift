@@ -87,7 +87,15 @@ struct FilterPanel: View {
                         options: Array(jiraService.availableProjects),
                         selectedOptions: Binding(
                             get: { jiraService.filters.projects },
-                            set: { jiraService.filters.projects = $0 }
+                            set: { newProjects in
+                                let oldProjects = jiraService.filters.projects
+                                jiraService.filters.projects = newProjects
+
+                                // Clear sprint selections when projects change
+                                if oldProjects != newProjects {
+                                    jiraService.filters.sprints.removeAll()
+                                }
+                            }
                         )
                     )
                 }
@@ -309,13 +317,13 @@ struct SprintSelector: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            if jiraService.availableSprints.isEmpty {
+            if jiraService.filteredSprints.isEmpty {
                 Text("No sprints in current issues")
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .padding(.vertical, 4)
             } else {
-                ForEach(jiraService.availableSprints) { sprint in
+                ForEach(jiraService.filteredSprints) { sprint in
                     Toggle(isOn: Binding(
                         get: { jiraService.filters.sprints.contains(sprint.id) },
                         set: { isSelected in

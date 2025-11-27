@@ -104,9 +104,14 @@ class AIService {
     private func buildContext() -> AIContext {
         let currentUser = UserDefaults.standard.string(forKey: "jiraEmail") ?? "unknown"
 
+        // Get selected issues by mapping IDs to actual issues
+        let selectedIssues = jiraService.selectedIssues.compactMap { selectedID in
+            jiraService.issues.first { $0.id == selectedID }
+        }
+
         return AIContext(
             currentUser: currentUser,
-            selectedIssues: [],
+            selectedIssues: selectedIssues,
             currentFilters: jiraService.filters,
             visibleIssues: Array(jiraService.issues.prefix(20)), // Top 20 for context
             availableProjects: Array(jiraService.availableProjects),
@@ -136,6 +141,7 @@ class AIService {
         - Active filters: \(describeFilters(context.currentFilters))
         - Visible issues: \(context.visibleIssues.count) issues currently loaded
         - Available sprints: \(context.availableSprints.map { $0.name }.joined(separator: ", "))
+        \(context.selectedIssues.isEmpty ? "" : "- SELECTED ISSUES (\(context.selectedIssues.count)): \(describeSelectedIssues(context.selectedIssues))")
 
         IMPORTANT INSTRUCTIONS:
         You can perform these Jira operations by including special format markers in your response:
@@ -180,6 +186,15 @@ class AIService {
            Link types: Blocks, Relates to, Duplicates, Clones
            Example: LINK: SETI-123 | SETI-124 | Blocks
 
+        10. CHANGELOG: Fetch change history for issue
+           Format: `CHANGELOG: <key>`
+           Example: CHANGELOG: SETI-123
+
+        11. DETAIL: Open detailed view of issue with comments, history, and all data
+           Format: `DETAIL: <key>`
+           Example: DETAIL: SETI-123
+           Use this when user asks for "details", "full information", "comments", or "show me" an issue
+
         IMPORTANT:
         - Always explain what you're doing in plain language alongside the operation
         - You can update multiple fields in one UPDATE command
@@ -205,6 +220,13 @@ class AIService {
         }
 
         return parts.isEmpty ? "No active filters" : parts.joined(separator: " | ")
+    }
+
+    private func describeSelectedIssues(_ issues: [JiraIssue]) -> String {
+        return issues.map { issue in
+            let assignee = issue.assignee ?? "Unassigned"
+            return "\(issue.key) [\(issue.status), \(assignee)]: \(issue.summary)"
+        }.joined(separator: "\n  ")
     }
 
     // MARK: - Intent Parsing
@@ -332,6 +354,18 @@ class AIService {
                 let linkedIssue = parts[1]
                 let linkType = parts[2]
                 return .linkIssues(issueKey: issueKey, linkedIssue: linkedIssue, linkType: linkType)
+            }
+
+            // Fetch changelog
+            if trimmed.hasPrefix("CHANGELOG:") {
+                let issueKey = trimmed.replacingOccurrences(of: "CHANGELOG:", with: "").trimmingCharacters(in: .whitespaces)
+                return .fetchChangelog(issueKey: issueKey)
+            }
+
+            // Show issue detail
+            if trimmed.hasPrefix("DETAIL:") {
+                let issueKey = trimmed.replacingOccurrences(of: "DETAIL:", with: "").trimmingCharacters(in: .whitespaces)
+                return .showIssueDetail(issueKey: issueKey)
             }
         }
 

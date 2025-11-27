@@ -1,0 +1,397 @@
+import SwiftUI
+
+// MARK: - Window Wrapper
+
+struct IssueDetailWindowWrapper: View {
+    let issueKey: String
+    let jiraService: JiraService
+
+    @State private var issueDetails: IssueDetails?
+    @State private var isLoading = true
+    @State private var errorMessage: String?
+
+    var body: some View {
+        Group {
+            if isLoading {
+                VStack(spacing: 16) {
+                    ProgressView()
+                        .scaleEffect(1.5)
+                    Text("Loading \(issueKey)...")
+                        .font(.headline)
+                        .foregroundColor(.secondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if let errorMessage = errorMessage {
+                VStack(spacing: 16) {
+                    Image(systemName: "exclamationmark.triangle")
+                        .font(.system(size: 48))
+                        .foregroundColor(.red)
+                    Text("Error loading issue")
+                        .font(.headline)
+                    Text(errorMessage)
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if let issueDetails = issueDetails {
+                IssueDetailView(issueDetails: issueDetails)
+                    .environmentObject(jiraService)
+            }
+        }
+        .task {
+            await loadIssueDetails()
+        }
+    }
+
+    private func loadIssueDetails() async {
+        isLoading = true
+        errorMessage = nil
+
+        let result = await jiraService.fetchIssueDetails(issueKey: issueKey)
+
+        if result.success, let details = result.details {
+            issueDetails = details
+        } else {
+            errorMessage = "Failed to load issue details for \(issueKey)"
+        }
+
+        isLoading = false
+    }
+}
+
+// MARK: - Issue Detail View
+
+struct IssueDetailView: View {
+    let issueDetails: IssueDetails
+    @EnvironmentObject var jiraService: JiraService
+    @Environment(\.dismiss) private var dismiss
+    @State private var selectedTab = 0
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header
+            headerView
+
+            Divider()
+
+            // Tab selector
+            Picker("", selection: $selectedTab) {
+                Text("Details").tag(0)
+                Text("Comments (\(issueDetails.comments.count))").tag(1)
+                Text("History").tag(2)
+            }
+            .pickerStyle(.segmented)
+            .padding()
+
+            // Content based on selected tab
+            TabView(selection: $selectedTab) {
+                detailsTab
+                    .tag(0)
+
+                commentsTab
+                    .tag(1)
+
+                historyTab
+                    .tag(2)
+            }
+            .tabViewStyle(.automatic)
+        }
+        .frame(minWidth: 600, minHeight: 500)
+    }
+
+    private var headerView: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Issue key and type
+            HStack {
+                Text(issueDetails.issue.key)
+                    .font(.system(size: 24, weight: .bold, design: .monospaced))
+                    .foregroundColor(.blue)
+
+                Text(issueDetails.issue.issueType)
+                    .font(.system(size: 12))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.gray.opacity(0.2))
+                    .cornerRadius(4)
+
+                Spacer()
+
+                // Open in browser button
+                Button(action: {
+                    if let url = URL(string: "\(Configuration.shared.jiraBaseURL)/browse/\(issueDetails.issue.key)") {
+                        NSWorkspace.shared.open(url)
+                    }
+                }) {
+                    Image(systemName: "arrow.up.right.square")
+                    Text("Open in Jira")
+                }
+            }
+
+            // Summary
+            Text(issueDetails.issue.summary)
+                .font(.system(size: 16))
+                .foregroundColor(.primary)
+
+            // Metadata row
+            HStack(spacing: 20) {
+                metadataItem(label: "Status", value: issueDetails.issue.status, color: statusColor(for: issueDetails.issue.status))
+                metadataItem(label: "Assignee", value: issueDetails.issue.assignee ?? "Unassigned", color: .secondary)
+                if let priority = issueDetails.issue.priority {
+                    metadataItem(label: "Priority", value: priority, color: priorityColor(for: priority))
+                }
+                metadataItem(label: "Project", value: issueDetails.issue.project, color: .secondary)
+            }
+        }
+        .padding()
+        .background(Color(NSColor.controlBackgroundColor).opacity(0.3))
+    }
+
+    private func metadataItem(label: String, value: String, color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(label)
+                .font(.system(size: 10))
+                .foregroundColor(.secondary)
+            Text(value)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(color)
+        }
+    }
+
+    private var detailsTab: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                // Description
+                if let description = issueDetails.description {
+                    DetailSection(title: "Description") {
+                        Text(description)
+                            .font(.body)
+                            .foregroundColor(.primary)
+                            .textSelection(.enabled)
+                    }
+                }
+
+                // Time tracking
+                if let originalEstimate = issueDetails.issue.fields.timeoriginalestimate,
+                   let timeSpent = issueDetails.issue.fields.timespent {
+                    DetailSection(title: "Time Tracking") {
+                        HStack(spacing: 30) {
+                            timeItem(label: "Original Estimate", seconds: originalEstimate)
+                            timeItem(label: "Time Spent", seconds: timeSpent)
+                            if let remaining = issueDetails.issue.fields.timeestimate {
+                                timeItem(label: "Remaining", seconds: remaining)
+                            }
+                        }
+                    }
+                }
+
+                // Components
+                if !issueDetails.issue.fields.components.isEmpty {
+                    DetailSection(title: "Components") {
+                        HStack(spacing: 8) {
+                            ForEach(issueDetails.issue.fields.components, id: \.name) { component in
+                                Text(component.name)
+                                    .font(.system(size: 11))
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(Color.blue.opacity(0.1))
+                                    .foregroundColor(.blue)
+                                    .cornerRadius(4)
+                            }
+                        }
+                    }
+                }
+
+                // Dates
+                DetailSection(title: "Dates") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        if let created = issueDetails.issue.created {
+                            HStack {
+                                Text("Created:")
+                                    .foregroundColor(.secondary)
+                                Text(formatDate(created))
+                                    .foregroundColor(.primary)
+                            }
+                        }
+                        if let updated = issueDetails.issue.updated {
+                            HStack {
+                                Text("Updated:")
+                                    .foregroundColor(.secondary)
+                                Text(formatDate(updated))
+                                    .foregroundColor(.primary)
+                            }
+                        }
+                    }
+                    .font(.system(size: 12))
+                }
+            }
+            .padding()
+        }
+    }
+
+    private var commentsTab: some View {
+        ScrollView {
+            if issueDetails.comments.isEmpty {
+                VStack(spacing: 12) {
+                    Image(systemName: "bubble.left.and.bubble.right")
+                        .font(.system(size: 48))
+                        .foregroundColor(.secondary)
+                    Text("No comments yet")
+                        .font(.headline)
+                        .foregroundColor(.secondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(60)
+            } else {
+                LazyVStack(alignment: .leading, spacing: 16) {
+                    ForEach(issueDetails.comments) { comment in
+                        CommentView(comment: comment)
+                    }
+                }
+                .padding()
+            }
+        }
+    }
+
+    private var historyTab: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                Text(issueDetails.changelog)
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundColor(.primary)
+                    .textSelection(.enabled)
+            }
+            .padding()
+        }
+    }
+
+    private func timeItem(label: String, seconds: Int) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(label)
+                .font(.system(size: 10))
+                .foregroundColor(.secondary)
+            Text(formatTime(seconds: seconds))
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(.primary)
+        }
+    }
+
+    private func formatTime(seconds: Int) -> String {
+        let hours = seconds / 3600
+        let minutes = (seconds % 3600) / 60
+
+        if hours > 0 {
+            return "\(hours)h \(minutes)m"
+        } else {
+            return "\(minutes)m"
+        }
+    }
+
+    private func formatDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
+    }
+
+    private func statusColor(for status: String) -> Color {
+        switch status.lowercased() {
+        case let s where s.contains("done") || s.contains("closed"):
+            return .green
+        case let s where s.contains("progress"):
+            return .blue
+        case let s where s.contains("review"):
+            return .orange
+        default:
+            return .gray
+        }
+    }
+
+    private func priorityColor(for priority: String) -> Color {
+        switch priority.lowercased() {
+        case "highest", "high":
+            return .red
+        case "medium":
+            return .orange
+        case "low", "lowest":
+            return .blue
+        default:
+            return .gray
+        }
+    }
+}
+
+// MARK: - Supporting Views
+
+struct DetailSection<Content: View>: View {
+    let title: String
+    let content: () -> Content
+
+    init(title: String, @ViewBuilder content: @escaping () -> Content) {
+        self.title = title
+        self.content = content
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(.primary)
+
+            content()
+        }
+    }
+}
+
+struct CommentView: View {
+    let comment: IssueComment
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Image(systemName: "person.circle.fill")
+                    .font(.system(size: 16))
+                    .foregroundColor(.blue)
+
+                Text(comment.author)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.primary)
+
+                Text(formatDate(comment.created))
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+
+                Spacer()
+            }
+
+            Text(comment.body)
+                .font(.system(size: 12))
+                .foregroundColor(.primary)
+                .textSelection(.enabled)
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(NSColor.controlBackgroundColor).opacity(0.3))
+                .cornerRadius(8)
+        }
+        .padding(12)
+        .background(Color(NSColor.windowBackgroundColor))
+        .cornerRadius(8)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+        )
+    }
+
+    private func formatDate(_ isoString: String) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+
+        guard let date = formatter.date(from: isoString) else {
+            return isoString
+        }
+
+        let displayFormatter = DateFormatter()
+        displayFormatter.dateStyle = .medium
+        displayFormatter.timeStyle = .short
+        return displayFormatter.string(from: date)
+    }
+}

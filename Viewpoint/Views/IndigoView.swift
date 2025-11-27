@@ -2,7 +2,16 @@ import SwiftUI
 
 struct IndigoView: View {
     @StateObject var viewModel: IndigoViewModel
+    @EnvironmentObject var jiraService: JiraService
     @Environment(\.textSizeMultiplier) var textSizeMultiplier
+    @Environment(\.openWindow) private var openWindow
+
+    // Computed property for selected issues
+    private var selectedIssues: [JiraIssue] {
+        jiraService.selectedIssues.compactMap { selectedID in
+            jiraService.issues.first { $0.id == selectedID }
+        }
+    }
 
     var body: some View {
         ZStack {
@@ -10,19 +19,34 @@ struct IndigoView: View {
             VisualEffectView()
                 .ignoresSafeArea()
 
-            VStack(spacing: 0) {
-                // Header
-                headerView
+            HStack(spacing: 0) {
+                // Main chat interface
+                VStack(spacing: 0) {
+                    // Header
+                    headerView
 
-                Divider()
+                    Divider()
 
-                // Conversation area
-                conversationView
+                    // Conversation area
+                    conversationView
 
-                Divider()
+                    Divider()
 
-                // Input area
-                inputView
+                    // Input area
+                    inputView
+                }
+
+                // Selected issues drawer (slides in from right when issues are selected)
+                if !selectedIssues.isEmpty {
+                    selectedIssuesDrawer
+                        .transition(.move(edge: .trailing))
+                }
+            }
+            .animation(.easeInOut(duration: 0.3), value: selectedIssues.count)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("OpenIssueDetail"))) { notification in
+            if let issueKey = notification.userInfo?["issueKey"] as? String {
+                openWindow(value: issueKey)
             }
         }
     }
@@ -235,6 +259,97 @@ struct IndigoView: View {
             .padding()
         }
         .background(Color(NSColor.windowBackgroundColor).opacity(0.5))
+    }
+
+    private var selectedIssuesDrawer: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Drawer header
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Selected Issues")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.primary)
+
+                    Text("\(selectedIssues.count) \(selectedIssues.count == 1 ? "issue" : "issues")")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                }
+
+                Spacer()
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(Color(NSColor.controlBackgroundColor).opacity(0.8))
+
+            Divider()
+
+            // List of selected issues
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 8) {
+                    ForEach(selectedIssues) { issue in
+                        VStack(alignment: .leading, spacing: 6) {
+                            // Issue key
+                            Text(issue.key)
+                                .font(.system(size: 12, weight: .medium, design: .monospaced))
+                                .foregroundColor(.blue)
+
+                            // Issue summary
+                            Text(issue.summary)
+                                .font(.system(size: 11))
+                                .foregroundColor(.primary)
+                                .lineLimit(2)
+                                .fixedSize(horizontal: false, vertical: true)
+
+                            // Metadata
+                            HStack(spacing: 8) {
+                                // Status badge
+                                Text(issue.status)
+                                    .font(.system(size: 9))
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(statusColor(for: issue.status).opacity(0.2))
+                                    .foregroundColor(statusColor(for: issue.status))
+                                    .cornerRadius(4)
+
+                                // Assignee
+                                if let assignee = issue.assignee {
+                                    Text(assignee)
+                                        .font(.system(size: 9))
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color(NSColor.controlBackgroundColor).opacity(0.4))
+                        .cornerRadius(8)
+                    }
+                }
+                .padding(12)
+            }
+        }
+        .frame(width: 280)
+        .background(Color(NSColor.windowBackgroundColor).opacity(0.9))
+        .overlay(
+            Rectangle()
+                .frame(width: 1)
+                .foregroundColor(Color(NSColor.separatorColor)),
+            alignment: .leading
+        )
+    }
+
+    private func statusColor(for status: String) -> Color {
+        switch status.lowercased() {
+        case let s where s.contains("done") || s.contains("closed"):
+            return .green
+        case let s where s.contains("progress"):
+            return .blue
+        case let s where s.contains("review"):
+            return .orange
+        default:
+            return .gray
+        }
     }
 }
 

@@ -382,6 +382,55 @@ class IndigoViewModel: ObservableObject {
                     ))
                 }
             }
+
+        case .fetchChangelog(let issueKey):
+            addMessage(Message(
+                text: "📜 Fetching change history for \(issueKey)...",
+                sender: .system
+            ))
+            Task {
+                let result = await jiraService.fetchChangelog(issueKey: issueKey)
+                if result.success, let changelog = result.changelog {
+                    addMessage(Message(
+                        text: changelog,
+                        sender: .ai,
+                        status: .success
+                    ))
+                } else {
+                    addMessage(Message(
+                        text: "✗ Failed to fetch changelog for \(issueKey)",
+                        sender: .system,
+                        status: .error
+                    ))
+                }
+            }
+
+        case .showIssueDetail(let issueKey):
+            addMessage(Message(
+                text: "🔍 Opening detailed view for \(issueKey)...",
+                sender: .system
+            ))
+
+            // Open the detail window on the main thread
+            Task { @MainActor in
+                // Use NSWorkspace to open a new window with the issue key
+                // This will trigger the WindowGroup(for: String.self) in ViewpointApp
+                if #available(macOS 13.0, *) {
+                    // On macOS 13+, we can use the openWindow environment action
+                    // But since we're in a ViewModel, we'll use a different approach
+                    NotificationCenter.default.post(
+                        name: Notification.Name("OpenIssueDetail"),
+                        object: nil,
+                        userInfo: ["issueKey": issueKey]
+                    )
+                }
+
+                addMessage(Message(
+                    text: "✓ Detail window opened for \(issueKey)",
+                    sender: .system,
+                    status: .success
+                ))
+            }
         }
     }
 

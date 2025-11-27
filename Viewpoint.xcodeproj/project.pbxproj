@@ -29,6 +29,7 @@
 		AA0009 /* PersistentSplitView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0011 /* PersistentSplitView.swift */; };
 		AA0010 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0012 /* SettingsView.swift */; };
 		AA0011 /* Logger.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0013 /* Logger.swift */; };
+		AA0012 /* IssueDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0014 /* IssueDetailView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -55,6 +56,7 @@
 		BB0011 /* PersistentSplitView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersistentSplitView.swift; sourceTree = "<group>"; };
 		BB0012 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		BB0013 /* Logger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Logger.swift; sourceTree = "<group>"; };
+		BB0014 /* IssueDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IssueDetailView.swift; sourceTree = "<group>"; };
 		CC0001 /* Viewpoint.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Viewpoint.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -136,6 +138,7 @@
 				BB0012 /* SettingsView.swift */,
 				A6CBA4C12ED0398E00528322 /* IndigoView.swift */,
 				A6CBA4C22ED0398E00528322 /* VisualEffectView.swift */,
+				BB0014 /* IssueDetailView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -239,6 +242,7 @@
 				AA0006 /* SprintInfoView.swift in Sources */,
 				A6CBA4C32ED0398E00528322 /* IndigoView.swift in Sources */,
 				A6CBA4C42ED0398E00528322 /* VisualEffectView.swift in Sources */,
+				AA0012 /* IssueDetailView.swift in Sources */,
 				AA0007 /* Configuration.swift in Sources */,
 				AA0009 /* PersistentSplitView.swift in Sources */,
 				AA0010 /* SettingsView.swift in Sources */,

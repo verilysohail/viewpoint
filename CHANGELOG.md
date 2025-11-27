@@ -2,6 +2,53 @@
 
 All notable changes to Viewpoint will be documented in this file.
 
+## [2.0 Beta 2] - 2025-11-26
+
+### Added
+- **🎯 Multi-Select Issues** - Select multiple issues in the main viewer to perform bulk operations via Indigo
+  - Use Cmd+Click or Shift+Click to select multiple issues
+  - Selected issues automatically sync to Indigo for bulk actions
+  - Sliding drawer in Indigo shows all selected issues with details
+  - Natural language bulk commands: "log 30 minutes to each", "close these as done", "add comment to all"
+
+- **📋 Issue Detail Windows** - Mac-native detail view with comprehensive issue information
+  - Ask Indigo "show me details for PROJ-123" to open a new detail window
+  - Three tabs: Details (description, time tracking, components), Comments (all comments with authors), History (complete changelog)
+  - Multiple detail windows can be open simultaneously
+  - "Open in Jira" button for quick browser access
+  - Properly formatted dates, times, and metadata with color-coding
+
+- **📜 Changelog Support** - Fetch complete change history for any issue
+  - Ask Indigo "get me the changelog for PROJ-123"
+  - Shows all field changes with timestamps and authors
+  - Formatted chronologically with clear before/after values
+
+- **📊 Log Rotation** - Automatic log file management prevents unbounded growth
+  - Logs rotate at 10MB with up to 5 archived files kept
+  - Maximum disk usage: ~60MB total
+  - Automatic cleanup of oldest logs
+
+### Fixed
+- **Sprint Filtering** - Sprints now intelligently filter based on selected projects
+  - Selecting a project shows only sprints from that project's boards
+  - Sprint selections auto-clear when changing projects to avoid confusion
+
+- **Multi-Select Filters** - All filters now support true multi-select
+  - Selecting an assignee no longer hides other assignees
+  - All filter options remain visible for easy multi-selection
+  - Smart option population when projects change
+
+- **Component Field Handling** - Fixed crashes when component field missing from API response
+  - Components default to empty array if not present
+  - Prevents JSON decoding failures
+
+### Technical Improvements
+- Enhanced issue detail API with parallel fetching of comments and changelog
+- ADF (Atlassian Document Format) text extraction for descriptions and comments
+- Improved state sharing between main window and Indigo using reactive bindings
+- Window management via NotificationCenter for cross-window communication
+- Smart filter option updates detect project changes automatically
+
 ## [2.0 Beta 1] - 2025-11-26
 
 ### What's New in 2.0

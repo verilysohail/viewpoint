@@ -3,7 +3,6 @@ import SwiftUI
 struct ContentView: View {
     @EnvironmentObject var jiraService: JiraService
     @Environment(\.openWindow) private var openWindow
-    @State private var selectedIssue: JiraIssue?
     @AppStorage("showFilters") private var showFilters: Bool = true
     @AppStorage("sortOption") private var sortOptionRaw: String = "dateCreated"
     @AppStorage("sortDirection") private var sortDirectionRaw: String = "descending"
@@ -63,6 +62,12 @@ struct ContentView: View {
         }
     }
 
+    // Get the first selected issue for single-issue operations
+    private var primarySelectedIssue: JiraIssue? {
+        guard let firstID = jiraService.selectedIssues.first else { return nil }
+        return jiraService.issues.first { $0.id == firstID }
+    }
+
     var filteredIssues: [JiraIssue] {
         var issues = jiraService.issues
 
@@ -120,11 +125,6 @@ struct ContentView: View {
                 let epic2 = issue2.epic ?? ""
                 return ascending ? epic1 < epic2 : epic1 > epic2
             }
-        }
-
-        // Debug logging
-        if !sorted.isEmpty {
-            Logger.shared.info("Sorted \(sorted.count) issues by \(sortOption.rawValue) \(sortDirection == .ascending ? "ascending" : "descending"), first: \(sorted.first?.key ?? "none"), last: \(sorted.last?.key ?? "none")")
         }
 
         return sorted
@@ -226,7 +226,7 @@ struct ContentView: View {
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
-                    IssueListView(selectedIssue: $selectedIssue, groupedIssues: groupedIssues, expandedSections: expandedSections)
+                    IssueListView(selectedIssues: $jiraService.selectedIssues, groupedIssues: groupedIssues, expandedSections: expandedSections)
                 }
             }
         }
@@ -252,7 +252,7 @@ struct ContentView: View {
             StatusBarView()
         }
         .sheet(isPresented: $showingLogWorkForSelected) {
-            if let issue = selectedIssue {
+            if let issue = primarySelectedIssue {
                 LogWorkView(issue: issue, isPresented: $showingLogWorkForSelected)
             }
         }
@@ -266,7 +266,7 @@ struct ContentView: View {
             ToolbarItem(id: "logWork", placement: .automatic, showsByDefault: true) {
                 // Log work for selected issue
                 Button(action: {
-                    if selectedIssue != nil {
+                    if primarySelectedIssue != nil {
                         showingLogWorkForSelected = true
                     }
                 }) {
@@ -274,7 +274,7 @@ struct ContentView: View {
                 }
                 .keyboardShortcut("l", modifiers: .command)
                 .help("Log work for selected issue (⌘L)")
-                .disabled(selectedIssue == nil)
+                .disabled(primarySelectedIssue == nil)
             }
 
             ToolbarItem(id: "launchIndigo", placement: .automatic, showsByDefault: true) {
@@ -399,12 +399,12 @@ struct HeaderView: View {
 // MARK: - Issue List View
 
 struct IssueListView: View {
-    @Binding var selectedIssue: JiraIssue?
+    @Binding var selectedIssues: Set<JiraIssue.ID>
     let groupedIssues: [(String, [JiraIssue])]
     @Binding var expandedSections: Set<String>
 
     var body: some View {
-        List(selection: $selectedIssue) {
+        List(selection: $selectedIssues) {
             ForEach(groupedIssues, id: \.0) { groupName, issues in
                 if groupedIssues.count > 1 {
                     DisclosureGroup(

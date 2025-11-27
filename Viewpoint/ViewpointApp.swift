@@ -29,6 +29,16 @@ struct ViewpointApp: App {
         .defaultSize(width: 500, height: 700)
         .defaultPosition(.center)
 
+        // Issue Detail Windows (one per issue)
+        WindowGroup(for: String.self) { $issueKey in
+            if let issueKey = issueKey {
+                IssueDetailWindowWrapper(issueKey: issueKey, jiraService: jiraService)
+            }
+        }
+        .windowStyle(.titleBar)
+        .windowResizability(.contentSize)
+        .defaultSize(width: 700, height: 600)
+
         Settings {
             SettingsView()
                 .onDisappear {

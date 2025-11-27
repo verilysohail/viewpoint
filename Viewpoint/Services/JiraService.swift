@@ -34,8 +34,32 @@ class JiraService: ObservableObject {
     // Current filters
     @Published var filters = IssueFilters()
 
+    // Selected issues (shared across windows for multi-select)
+    @Published var selectedIssues: Set<JiraIssue.ID> = []
+
     // Current JQL query
     @Published var currentJQL: String?
+
+    // Filtered sprints based on selected projects and loaded issues
+    var filteredSprints: [JiraSprint] {
+        // If no projects selected, show sprints from current issues
+        if filters.projects.isEmpty {
+            // Extract sprints from currently loaded issues
+            let sprintsInIssues = Set(issues.compactMap { issue in
+                issue.fields.customfield_10020?.compactMap { $0.id }
+            }.flatMap { $0 })
+
+            return availableSprints.filter { sprintsInIssues.contains($0.id) }
+        } else {
+            // Show sprints from issues that match selected projects
+            let projectIssues = issues.filter { filters.projects.contains($0.project) }
+            let sprintsInProjects = Set(projectIssues.compactMap { issue in
+                issue.fields.customfield_10020?.compactMap { $0.id }
+            }.flatMap { $0 })
+
+            return availableSprints.filter { sprintsInProjects.contains($0.id) }
+        }
+    }
 
     init() {
         loadPersistedFilters()
@@ -54,6 +78,8 @@ class JiraService: ObservableObject {
             filters.showOnlyMyIssues = decoded.showOnlyMyIssues
             Logger.shared.info("Loaded persisted filters: \(filters)")
         }
+        // Initialize previous projects to current state to avoid false change detection
+        previousProjects = filters.projects
     }
 
     func saveFilters() {
@@ -640,10 +666,8 @@ class JiraService: ObservableObject {
         // Extract unique components from issues
         var componentSet: Set<String> = []
         for issue in issues {
-            if let components = issue.fields.components {
-                for component in components {
-                    componentSet.insert(component.name)
-                }
+            for component in issue.fields.components {
+                componentSet.insert(component.name)
             }
         }
         availableComponents = componentSet
@@ -669,12 +693,22 @@ class JiraService: ObservableObject {
         availableSprints = sprintMap.values.sorted { $0.id > $1.id } // Most recent first
     }
 
-    func applyFilters() {
+    // Track previous project selection to detect changes
+    private var previousProjects: Set<String> = []
+
+    func applyFilters(updateOptions: Bool = false) {
         saveFilters()
+
+        // Auto-detect if projects changed - if so, update options to populate filters
+        let projectsChanged = previousProjects != filters.projects
+        let shouldUpdateOptions = updateOptions || projectsChanged
+
+        if projectsChanged {
+            previousProjects = filters.projects
+        }
+
         Task {
-            // Don't update available filter options when applying filters
-            // This keeps all original options visible for multi-select
-            await fetchMyIssues(updateAvailableOptions: false)
+            await fetchMyIssues(updateAvailableOptions: shouldUpdateOptions)
         }
     }
 
@@ -1312,6 +1346,238 @@ class JiraService: ObservableObject {
             Logger.shared.error("Failed to link issues: \(error)")
             return false
         }
+    }
+
+    func fetchChangelog(issueKey: String) async -> (success: Bool, changelog: String?) {
+        let urlString = "\(config.jiraBaseURL)/rest/api/3/issue/\(issueKey)/changelog"
+
+        guard let url = URL(string: urlString) else {
+            Logger.shared.error("Invalid URL for fetching changelog")
+            return (false, nil)
+        }
+
+        let request = createRequest(url: url)
+
+        do {
+            Logger.shared.info("Fetching changelog for \(issueKey)")
+
+            let (data, response) = try await URLSession.shared.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw URLError(.badServerResponse)
+            }
+
+            Logger.shared.info("Changelog response status: \(httpResponse.statusCode)")
+
+            if httpResponse.statusCode == 200 {
+                // Parse the changelog
+                if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let values = json["values"] as? [[String: Any]] {
+
+                    var changelogText = "Change History for \(issueKey):\n\n"
+
+                    for change in values.reversed() { // Reverse to show oldest first
+                        // Extract timestamp
+                        if let created = change["created"] as? String {
+                            changelogText += "• \(formatChangelogDate(created))\n"
+                        }
+
+                        // Extract author
+                        if let author = change["author"] as? [String: Any],
+                           let displayName = author["displayName"] as? String {
+                            changelogText += "  By: \(displayName)\n"
+                        }
+
+                        // Extract items (field changes)
+                        if let items = change["items"] as? [[String: Any]] {
+                            for item in items {
+                                let field = item["field"] as? String ?? "Unknown"
+                                let fieldType = item["fieldtype"] as? String
+                                let from = item["fromString"] as? String ?? "(none)"
+                                let to = item["toString"] as? String ?? "(none)"
+
+                                changelogText += "  Changed \(field): \(from) → \(to)\n"
+                            }
+                        }
+
+                        changelogText += "\n"
+                    }
+
+                    Logger.shared.info("Successfully fetched changelog for \(issueKey)")
+                    return (true, changelogText)
+                } else {
+                    return (true, "No changelog entries found for \(issueKey)")
+                }
+            } else {
+                if let errorMessage = String(data: data, encoding: .utf8) {
+                    Logger.shared.error("Error fetching changelog: \(errorMessage)")
+                }
+                return (false, nil)
+            }
+        } catch {
+            Logger.shared.error("Failed to fetch changelog: \(error)")
+            return (false, nil)
+        }
+    }
+
+    private func formatChangelogDate(_ isoString: String) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+
+        guard let date = formatter.date(from: isoString) else {
+            return isoString
+        }
+
+        let displayFormatter = DateFormatter()
+        displayFormatter.dateStyle = .medium
+        displayFormatter.timeStyle = .short
+        return displayFormatter.string(from: date)
+    }
+
+    func fetchIssueDetails(issueKey: String) async -> (success: Bool, details: IssueDetails?) {
+        let urlString = "\(config.jiraBaseURL)/rest/api/3/issue/\(issueKey)"
+
+        guard let url = URL(string: urlString) else {
+            Logger.shared.error("Invalid URL for fetching issue details")
+            return (false, nil)
+        }
+
+        let request = createRequest(url: url)
+
+        do {
+            Logger.shared.info("Fetching full details for \(issueKey)")
+
+            let (data, response) = try await URLSession.shared.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw URLError(.badServerResponse)
+            }
+
+            Logger.shared.info("Issue details response status: \(httpResponse.statusCode)")
+
+            if httpResponse.statusCode == 200 {
+                let decoder = JSONDecoder()
+                let issue = try decoder.decode(JiraIssue.self, from: data)
+
+                // Extract description from raw JSON (it's in ADF format)
+                var descriptionText: String? = nil
+                if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let fields = json["fields"] as? [String: Any],
+                   let descriptionADF = fields["description"] as? [String: Any] {
+                    descriptionText = extractTextFromADF(descriptionADF)
+                }
+
+                // Also fetch comments and changelog
+                async let commentsResult = fetchComments(issueKey: issueKey)
+                async let changelogResult = fetchChangelog(issueKey: issueKey)
+
+                let comments = await commentsResult
+                let changelog = await changelogResult
+
+                let details = IssueDetails(
+                    issue: issue,
+                    description: descriptionText,
+                    comments: comments.comments ?? [],
+                    changelog: changelog.changelog ?? "No changelog available"
+                )
+
+                Logger.shared.info("Successfully fetched details for \(issueKey)")
+                return (true, details)
+            } else {
+                if let errorMessage = String(data: data, encoding: .utf8) {
+                    Logger.shared.error("Error fetching issue details: \(errorMessage)")
+                }
+                return (false, nil)
+            }
+        } catch {
+            Logger.shared.error("Failed to fetch issue details: \(error)")
+            return (false, nil)
+        }
+    }
+
+    func fetchComments(issueKey: String) async -> (success: Bool, comments: [IssueComment]?) {
+        let urlString = "\(config.jiraBaseURL)/rest/api/3/issue/\(issueKey)/comment"
+
+        guard let url = URL(string: urlString) else {
+            Logger.shared.error("Invalid URL for fetching comments")
+            return (false, nil)
+        }
+
+        let request = createRequest(url: url)
+
+        do {
+            Logger.shared.info("Fetching comments for \(issueKey)")
+
+            let (data, response) = try await URLSession.shared.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw URLError(.badServerResponse)
+            }
+
+            if httpResponse.statusCode == 200 {
+                if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let commentsArray = json["comments"] as? [[String: Any]] {
+
+                    var comments: [IssueComment] = []
+
+                    for commentDict in commentsArray {
+                        if let id = commentDict["id"] as? String,
+                           let author = commentDict["author"] as? [String: Any],
+                           let authorName = author["displayName"] as? String,
+                           let created = commentDict["created"] as? String,
+                           let body = commentDict["body"] as? [String: Any] {
+
+                            // Extract plain text from ADF (Atlassian Document Format)
+                            let bodyText = extractTextFromADF(body)
+
+                            let comment = IssueComment(
+                                id: id,
+                                author: authorName,
+                                created: created,
+                                body: bodyText
+                            )
+                            comments.append(comment)
+                        }
+                    }
+
+                    Logger.shared.info("Successfully fetched \(comments.count) comments for \(issueKey)")
+                    return (true, comments)
+                }
+                return (true, [])
+            } else {
+                if let errorMessage = String(data: data, encoding: .utf8) {
+                    Logger.shared.error("Error fetching comments: \(errorMessage)")
+                }
+                return (false, nil)
+            }
+        } catch {
+            Logger.shared.error("Failed to fetch comments: \(error)")
+            return (false, nil)
+        }
+    }
+
+    private func extractTextFromADF(_ adf: [String: Any]) -> String {
+        guard let content = adf["content"] as? [[String: Any]] else {
+            return ""
+        }
+
+        var text = ""
+        for node in content {
+            if let nodeType = node["type"] as? String {
+                if nodeType == "paragraph" {
+                    if let paragraphContent = node["content"] as? [[String: Any]] {
+                        for textNode in paragraphContent {
+                            if let nodeText = textNode["text"] as? String {
+                                text += nodeText
+                            }
+                        }
+                    }
+                    text += "\n"
+                }
+            }
+        }
+
+        return text.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     func createIssue(fields: [String: Any]) async -> (success: Bool, issueKey: String?) {

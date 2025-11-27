@@ -64,7 +64,7 @@ struct IssueFields: Codable, Hashable {
     let priority: PriorityField?
     let created: String?
     let updated: String?
-    let components: [ComponentField]?
+    let components: [ComponentField]
     let customfield_10014: String? // Epic Link
     let customfield_10016: Double? // Story Points
     let customfield_10020: [SprintField]? // Sprint
@@ -78,6 +78,26 @@ struct IssueFields: Codable, Hashable {
         case components
         case customfield_10014, customfield_10016, customfield_10020
         case timeoriginalestimate, timespent, timeestimate
+    }
+
+    // Default empty array for components
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        summary = try container.decode(String.self, forKey: .summary)
+        status = try container.decode(StatusField.self, forKey: .status)
+        assignee = try container.decodeIfPresent(UserField.self, forKey: .assignee)
+        issuetype = try container.decode(IssueTypeField.self, forKey: .issuetype)
+        project = try container.decode(ProjectField.self, forKey: .project)
+        priority = try container.decodeIfPresent(PriorityField.self, forKey: .priority)
+        created = try container.decodeIfPresent(String.self, forKey: .created)
+        updated = try container.decodeIfPresent(String.self, forKey: .updated)
+        components = (try? container.decode([ComponentField].self, forKey: .components)) ?? []
+        customfield_10014 = try container.decodeIfPresent(String.self, forKey: .customfield_10014)
+        customfield_10016 = try container.decodeIfPresent(Double.self, forKey: .customfield_10016)
+        customfield_10020 = try container.decodeIfPresent([SprintField].self, forKey: .customfield_10020)
+        timeoriginalestimate = try container.decodeIfPresent(Int.self, forKey: .timeoriginalestimate)
+        timespent = try container.decodeIfPresent(Int.self, forKey: .timespent)
+        timeestimate = try container.decodeIfPresent(Int.self, forKey: .timeestimate)
     }
 }
 
@@ -300,4 +320,21 @@ enum GroupOption: String, CaseIterable, Identifiable {
     case initiative = "Initiative"
 
     var id: String { rawValue }
+}
+
+// MARK: - Issue Details Models
+
+struct IssueDetails: Identifiable {
+    let id = UUID()
+    let issue: JiraIssue
+    let description: String?
+    let comments: [IssueComment]
+    let changelog: String
+}
+
+struct IssueComment: Identifiable {
+    let id: String
+    let author: String
+    let created: String
+    let body: String
 }

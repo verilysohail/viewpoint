@@ -105,6 +105,8 @@ struct AIResponse {
         case assignIssue(issueKey: String, assignee: String)
         case addWatcher(issueKey: String, watcher: String)
         case linkIssues(issueKey: String, linkedIssue: String, linkType: String)
+        case fetchChangelog(issueKey: String)
+        case showIssueDetail(issueKey: String)
     }
 
     var estimatedCost: Double {
