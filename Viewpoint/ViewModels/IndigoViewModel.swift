@@ -129,9 +129,11 @@ class IndigoViewModel: ObservableObject {
                             )
                         }
 
-                        // Execute any Jira operations from the intents
-                        for intent in response.intents {
-                            self.executeIntent(intent)
+                        // Execute any Jira operations from the intents sequentially
+                        Task {
+                            for intent in response.intents {
+                                await self.executeIntent(intent)
+                            }
                         }
 
                     case .failure(let error):
@@ -151,30 +153,28 @@ class IndigoViewModel: ObservableObject {
         )
     }
 
-    private func executeIntent(_ intent: AIResponse.Intent) {
+    private func executeIntent(_ intent: AIResponse.Intent) async {
         switch intent {
         case .search(let jql):
             addMessage(Message(
                 text: "🔍 Executing search with JQL: \(jql)",
                 sender: .system
             ))
-            Task {
-                await jiraService.searchWithJQL(jql)
-                // Check if search was successful
-                let issueCount = await MainActor.run { jiraService.issues.count }
-                if issueCount > 0 {
-                    addMessage(Message(
-                        text: "✓ Found \(issueCount) issue\(issueCount == 1 ? "" : "s"). Results are now displayed in the main window.",
-                        sender: .system,
-                        status: .success
-                    ))
-                } else {
-                    addMessage(Message(
-                        text: "No issues found matching this search.",
-                        sender: .system,
-                        status: .warning
-                    ))
-                }
+            await jiraService.searchWithJQL(jql)
+            // Check if search was successful
+            let issueCount = jiraService.issues.count
+            if issueCount > 0 {
+                addMessage(Message(
+                    text: "✓ Found \(issueCount) issue\(issueCount == 1 ? "" : "s"). Results are now displayed in the main window.",
+                    sender: .system,
+                    status: .success
+                ))
+            } else {
+                addMessage(Message(
+                    text: "No issues found matching this search.",
+                    sender: .system,
+                    status: .warning
+                ))
             }
 
         case .update(let issueKey, let fields):
@@ -182,21 +182,19 @@ class IndigoViewModel: ObservableObject {
                 text: "✏️ Updating issue \(issueKey): \(fields)",
                 sender: .system
             ))
-            Task {
-                let success = await jiraService.updateIssue(issueKey: issueKey, fields: fields)
-                if success {
-                    addMessage(Message(
-                        text: "✓ Successfully updated \(issueKey)!",
-                        sender: .system,
-                        status: .success
-                    ))
-                } else {
-                    addMessage(Message(
-                        text: "✗ Failed to update issue. Check the logs for details.",
-                        sender: .system,
-                        status: .error
-                    ))
-                }
+            let success = await jiraService.updateIssue(issueKey: issueKey, fields: fields)
+            if success {
+                addMessage(Message(
+                    text: "✓ Successfully updated \(issueKey)!",
+                    sender: .system,
+                    status: .success
+                ))
+            } else {
+                addMessage(Message(
+                    text: "✗ Failed to update issue. Check the logs for details.",
+                    sender: .system,
+                    status: .error
+                ))
             }
 
         case .create(let fields):
@@ -204,29 +202,27 @@ class IndigoViewModel: ObservableObject {
                 text: "➕ Creating new issue: \(fields)",
                 sender: .system
             ))
-            Task {
-                let result = await jiraService.createIssue(fields: fields)
-                if result.success {
-                    if let issueKey = result.issueKey {
-                        addMessage(Message(
-                            text: "✓ Successfully created issue \(issueKey)!",
-                            sender: .system,
-                            status: .success
-                        ))
-                    } else {
-                        addMessage(Message(
-                            text: "✓ Issue created successfully!",
-                            sender: .system,
-                            status: .success
-                        ))
-                    }
+            let result = await jiraService.createIssue(fields: fields)
+            if result.success {
+                if let issueKey = result.issueKey {
+                    addMessage(Message(
+                        text: "✓ Successfully created issue \(issueKey)!",
+                        sender: .system,
+                        status: .success
+                    ))
                 } else {
                     addMessage(Message(
-                        text: "✗ Failed to create issue. Check the logs for details.",
+                        text: "✓ Issue created successfully!",
                         sender: .system,
-                        status: .error
+                        status: .success
                     ))
                 }
+            } else {
+                addMessage(Message(
+                    text: "✗ Failed to create issue. Check the logs for details.",
+                    sender: .system,
+                    status: .error
+                ))
             }
 
         case .logWork(let issueKey, let timeSeconds):
@@ -234,21 +230,19 @@ class IndigoViewModel: ObservableObject {
                 text: "⏱️ Logging \(timeSeconds)s to \(issueKey)",
                 sender: .system
             ))
-            Task {
-                let success = await jiraService.logWork(issueKey: issueKey, timeSpentSeconds: timeSeconds)
-                if success {
-                    addMessage(Message(
-                        text: "✓ Work logged successfully!",
-                        sender: .system,
-                        status: .success
-                    ))
-                } else {
-                    addMessage(Message(
-                        text: "✗ Failed to log work",
-                        sender: .system,
-                        status: .error
-                    ))
-                }
+            let success = await jiraService.logWork(issueKey: issueKey, timeSpentSeconds: timeSeconds)
+            if success {
+                addMessage(Message(
+                    text: "✓ Work logged successfully!",
+                    sender: .system,
+                    status: .success
+                ))
+            } else {
+                addMessage(Message(
+                    text: "✗ Failed to log work",
+                    sender: .system,
+                    status: .error
+                ))
             }
 
         case .changeStatus(let issueKey, let newStatus):
@@ -256,21 +250,19 @@ class IndigoViewModel: ObservableObject {
                 text: "🔄 Changing \(issueKey) status to \(newStatus)",
                 sender: .system
             ))
-            Task {
-                let success = await jiraService.updateIssueStatus(issueKey: issueKey, newStatus: newStatus)
-                if success {
-                    addMessage(Message(
-                        text: "✓ Status updated successfully!",
-                        sender: .system,
-                        status: .success
-                    ))
-                } else {
-                    addMessage(Message(
-                        text: "✗ Failed to update status",
-                        sender: .system,
-                        status: .error
-                    ))
-                }
+            let success = await jiraService.updateIssueStatus(issueKey: issueKey, newStatus: newStatus)
+            if success {
+                addMessage(Message(
+                    text: "✓ Status updated successfully!",
+                    sender: .system,
+                    status: .success
+                ))
+            } else {
+                addMessage(Message(
+                    text: "✗ Failed to update status",
+                    sender: .system,
+                    status: .error
+                ))
             }
 
         case .addComment(let issueKey, let comment):
@@ -278,21 +270,19 @@ class IndigoViewModel: ObservableObject {
                 text: "💬 Adding comment to \(issueKey)",
                 sender: .system
             ))
-            Task {
-                let success = await jiraService.addComment(issueKey: issueKey, comment: comment)
-                if success {
-                    addMessage(Message(
-                        text: "✓ Comment added successfully!",
-                        sender: .system,
-                        status: .success
-                    ))
-                } else {
-                    addMessage(Message(
-                        text: "✗ Failed to add comment",
-                        sender: .system,
-                        status: .error
-                    ))
-                }
+            let success = await jiraService.addComment(issueKey: issueKey, comment: comment)
+            if success {
+                addMessage(Message(
+                    text: "✓ Comment added successfully!",
+                    sender: .system,
+                    status: .success
+                ))
+            } else {
+                addMessage(Message(
+                    text: "✗ Failed to add comment",
+                    sender: .system,
+                    status: .error
+                ))
             }
 
         case .deleteIssue(let issueKey):
@@ -300,21 +290,19 @@ class IndigoViewModel: ObservableObject {
                 text: "🗑️ Deleting issue \(issueKey)",
                 sender: .system
             ))
-            Task {
-                let success = await jiraService.deleteIssue(issueKey: issueKey)
-                if success {
-                    addMessage(Message(
-                        text: "✓ Issue deleted successfully!",
-                        sender: .system,
-                        status: .success
-                    ))
-                } else {
-                    addMessage(Message(
-                        text: "✗ Failed to delete issue",
-                        sender: .system,
-                        status: .error
-                    ))
-                }
+            let success = await jiraService.deleteIssue(issueKey: issueKey)
+            if success {
+                addMessage(Message(
+                    text: "✓ Issue deleted successfully!",
+                    sender: .system,
+                    status: .success
+                ))
+            } else {
+                addMessage(Message(
+                    text: "✗ Failed to delete issue",
+                    sender: .system,
+                    status: .error
+                ))
             }
 
         case .assignIssue(let issueKey, let assignee):
@@ -322,21 +310,19 @@ class IndigoViewModel: ObservableObject {
                 text: "👤 Assigning \(issueKey) to \(assignee)",
                 sender: .system
             ))
-            Task {
-                let success = await jiraService.assignIssue(issueKey: issueKey, assigneeEmail: assignee)
-                if success {
-                    addMessage(Message(
-                        text: "✓ Issue assigned successfully!",
-                        sender: .system,
-                        status: .success
-                    ))
-                } else {
-                    addMessage(Message(
-                        text: "✗ Failed to assign issue",
-                        sender: .system,
-                        status: .error
-                    ))
-                }
+            let success = await jiraService.assignIssue(issueKey: issueKey, assigneeEmail: assignee)
+            if success {
+                addMessage(Message(
+                    text: "✓ Issue assigned successfully!",
+                    sender: .system,
+                    status: .success
+                ))
+            } else {
+                addMessage(Message(
+                    text: "✗ Failed to assign issue",
+                    sender: .system,
+                    status: .error
+                ))
             }
 
         case .addWatcher(let issueKey, let watcher):
@@ -344,21 +330,19 @@ class IndigoViewModel: ObservableObject {
                 text: "👁️ Adding \(watcher) as watcher to \(issueKey)",
                 sender: .system
             ))
-            Task {
-                let success = await jiraService.addWatcher(issueKey: issueKey, watcherEmail: watcher)
-                if success {
-                    addMessage(Message(
-                        text: "✓ Watcher added successfully!",
-                        sender: .system,
-                        status: .success
-                    ))
-                } else {
-                    addMessage(Message(
-                        text: "✗ Failed to add watcher",
-                        sender: .system,
-                        status: .error
-                    ))
-                }
+            let success = await jiraService.addWatcher(issueKey: issueKey, watcherEmail: watcher)
+            if success {
+                addMessage(Message(
+                    text: "✓ Watcher added successfully!",
+                    sender: .system,
+                    status: .success
+                ))
+            } else {
+                addMessage(Message(
+                    text: "✗ Failed to add watcher",
+                    sender: .system,
+                    status: .error
+                ))
             }
 
         case .linkIssues(let issueKey, let linkedIssue, let linkType):
@@ -366,21 +350,19 @@ class IndigoViewModel: ObservableObject {
                 text: "🔗 Linking \(issueKey) to \(linkedIssue) (\(linkType))",
                 sender: .system
             ))
-            Task {
-                let success = await jiraService.linkIssues(issueKey: issueKey, linkedIssueKey: linkedIssue, linkType: linkType)
-                if success {
-                    addMessage(Message(
-                        text: "✓ Issues linked successfully!",
-                        sender: .system,
-                        status: .success
-                    ))
-                } else {
-                    addMessage(Message(
-                        text: "✗ Failed to link issues",
-                        sender: .system,
-                        status: .error
-                    ))
-                }
+            let success = await jiraService.linkIssues(issueKey: issueKey, linkedIssueKey: linkedIssue, linkType: linkType)
+            if success {
+                addMessage(Message(
+                    text: "✓ Issues linked successfully!",
+                    sender: .system,
+                    status: .success
+                ))
+            } else {
+                addMessage(Message(
+                    text: "✗ Failed to link issues",
+                    sender: .system,
+                    status: .error
+                ))
             }
 
         case .fetchChangelog(let issueKey):
@@ -388,21 +370,19 @@ class IndigoViewModel: ObservableObject {
                 text: "📜 Fetching change history for \(issueKey)...",
                 sender: .system
             ))
-            Task {
-                let result = await jiraService.fetchChangelog(issueKey: issueKey)
-                if result.success, let changelog = result.changelog {
-                    addMessage(Message(
-                        text: changelog,
-                        sender: .ai,
-                        status: .success
-                    ))
-                } else {
-                    addMessage(Message(
-                        text: "✗ Failed to fetch changelog for \(issueKey)",
-                        sender: .system,
-                        status: .error
-                    ))
-                }
+            let result = await jiraService.fetchChangelog(issueKey: issueKey)
+            if result.success, let changelog = result.changelog {
+                addMessage(Message(
+                    text: changelog,
+                    sender: .ai,
+                    status: .success
+                ))
+            } else {
+                addMessage(Message(
+                    text: "✗ Failed to fetch changelog for \(issueKey)",
+                    sender: .system,
+                    status: .error
+                ))
             }
 
         case .showIssueDetail(let issueKey):
@@ -411,26 +391,23 @@ class IndigoViewModel: ObservableObject {
                 sender: .system
             ))
 
-            // Open the detail window on the main thread
-            Task { @MainActor in
-                // Use NSWorkspace to open a new window with the issue key
-                // This will trigger the WindowGroup(for: String.self) in ViewpointApp
-                if #available(macOS 13.0, *) {
-                    // On macOS 13+, we can use the openWindow environment action
-                    // But since we're in a ViewModel, we'll use a different approach
-                    NotificationCenter.default.post(
-                        name: Notification.Name("OpenIssueDetail"),
-                        object: nil,
-                        userInfo: ["issueKey": issueKey]
-                    )
-                }
-
-                addMessage(Message(
-                    text: "✓ Detail window opened for \(issueKey)",
-                    sender: .system,
-                    status: .success
-                ))
+            // Use NSWorkspace to open a new window with the issue key
+            // This will trigger the WindowGroup(for: String.self) in ViewpointApp
+            if #available(macOS 13.0, *) {
+                // On macOS 13+, we can use the openWindow environment action
+                // But since we're in a ViewModel, we'll use a different approach
+                NotificationCenter.default.post(
+                    name: Notification.Name("OpenIssueDetail"),
+                    object: nil,
+                    userInfo: ["issueKey": issueKey]
+                )
             }
+
+            addMessage(Message(
+                text: "✓ Detail window opened for \(issueKey)",
+                sender: .system,
+                status: .success
+            ))
         }
     }
 
