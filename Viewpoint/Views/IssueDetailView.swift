@@ -424,15 +424,26 @@ struct IssueSprintSelector: View {
     private var projectSprints: [JiraSprint] {
         // Filter sprints to only those from this project
         let allSprints = jiraService.availableSprints
+        let projectKey = issue.fields.project.key
+
+        Logger.shared.info("IssueSprintSelector: Filtering sprints for issue \(issue.key) in project '\(issue.project)' (key: \(projectKey))")
+        Logger.shared.info("IssueSprintSelector: Total available sprints: \(allSprints.count)")
+        Logger.shared.info("IssueSprintSelector: Sprint project map has \(jiraService.sprintProjectMap.count) entries")
 
         // Try to filter by project using sprintProjectMap
         let filtered = allSprints.filter { sprint in
             if let projects = jiraService.sprintProjectMap[sprint.id] {
-                return projects.contains(issue.project)
+                let matches = projects.contains(projectKey)
+                Logger.shared.info("IssueSprintSelector: Sprint \(sprint.id) (\(sprint.name)) mapped to projects: \(projects.joined(separator: ", ")) - matches: \(matches)")
+                return matches
             }
             // Fallback: check if sprint name contains project key
-            return sprint.name.uppercased().contains(issue.project.uppercased())
+            let matches = sprint.name.uppercased().contains(projectKey.uppercased())
+            Logger.shared.info("IssueSprintSelector: Sprint \(sprint.id) (\(sprint.name)) not in map, using name match: \(matches)")
+            return matches
         }
+
+        Logger.shared.info("IssueSprintSelector: Filtered to \(filtered.count) sprints for project \(projectKey)")
 
         return filtered.sorted { $0.id > $1.id } // Most recent first
     }
