@@ -1977,31 +1977,18 @@ class JiraService: ObservableObject {
             Logger.shared.error("Failed to fetch boards for project \(projectKey): \(error)")
         }
 
-        // Get all cached sprints and filter to active ones from this project's boards
-        let allSprints = await MainActor.run { self.availableSprints }
-
+        // Fetch sprints directly from the project's boards
         var activeProjectSprints: [JiraSprint] = []
 
-        // For each sprint, check if it belongs to one of the project's boards
-        for sprint in allSprints where sprint.state.lowercased() == "active" {
-            // Query the sprint to get its originBoardId
-            let sprintURL = "\(config.jiraBaseURL)/rest/agile/1.0/sprint/\(sprint.id)"
-            guard let url = URL(string: sprintURL) else { continue }
+        for boardId in projectBoardIds {
+            let boardSprints = await fetchSprintsForBoard(boardId: boardId)
 
-            let request = createRequest(url: url)
+            // Filter to only active sprints
+            let activeSprints = boardSprints.filter { $0.state.lowercased() == "active" }
 
-            do {
-                let (data, _) = try await URLSession.shared.data(for: request)
+            Logger.shared.info("Board \(boardId) has \(activeSprints.count) active sprint(s)")
 
-                if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                   let originBoardId = json["originBoardId"] as? Int,
-                   projectBoardIds.contains(originBoardId) {
-                    activeProjectSprints.append(sprint)
-                    Logger.shared.info("Sprint \(sprint.name) (ID: \(sprint.id)) belongs to project \(projectKey) via board \(originBoardId)")
-                }
-            } catch {
-                Logger.shared.error("Failed to fetch sprint \(sprint.id) details: \(error)")
-            }
+            activeProjectSprints.append(contentsOf: activeSprints)
         }
 
         if activeProjectSprints.isEmpty {
