@@ -144,6 +144,7 @@ struct IssueDetailView: View {
                     metadataItem(label: "Priority", value: priority, color: priorityColor(for: priority))
                 }
                 metadataItem(label: "Project", value: issueDetails.issue.project, color: .secondary)
+                SprintSelector(issue: issueDetails.issue)
             }
         }
         .padding()
@@ -401,5 +402,107 @@ struct CommentView: View {
         displayFormatter.dateStyle = .medium
         displayFormatter.timeStyle = .short
         return displayFormatter.string(from: date)
+    }
+}
+
+// MARK: - Sprint Selector
+
+struct SprintSelector: View {
+    let issue: JiraIssue
+    @EnvironmentObject var jiraService: JiraService
+    @State private var selectedSprintName: String = ""
+    @State private var isEditing: Bool = false
+    @State private var searchText: String = ""
+
+    private var currentSprintName: String {
+        if let sprints = issue.fields.sprint, !sprints.isEmpty, let firstSprint = sprints.first {
+            return firstSprint.name
+        }
+        return "Backlog"
+    }
+
+    private var projectSprints: [JiraSprint] {
+        // Filter sprints to only those from this project
+        let allSprints = jiraService.availableSprints
+
+        // Try to filter by project using sprintProjectMap
+        let filtered = allSprints.filter { sprint in
+            if let projects = jiraService.sprintProjectMap[sprint.id] {
+                return projects.contains(issue.project)
+            }
+            // Fallback: check if sprint name contains project key
+            return sprint.name.uppercased().contains(issue.project.uppercased())
+        }
+
+        return filtered.sorted { $0.id > $1.id } // Most recent first
+    }
+
+    private var filteredSprints: [JiraSprint] {
+        if searchText.isEmpty {
+            return projectSprints
+        }
+        return projectSprints.filter { $0.name.lowercased().contains(searchText.lowercased()) }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Sprint")
+                .font(.system(size: 10))
+                .foregroundColor(.secondary)
+
+            Menu {
+                Button("Backlog") {
+                    updateSprint(to: nil)
+                }
+
+                Divider()
+
+                TextField("Search sprints...", text: $searchText)
+                    .textFieldStyle(.roundedBorder)
+                    .padding(.horizontal, 8)
+
+                Divider()
+
+                ForEach(filteredSprints) { sprint in
+                    Button(sprint.name) {
+                        updateSprint(to: sprint)
+                    }
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Text(currentSprintName)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(currentSprintName == "Backlog" ? .gray : .orange)
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 8))
+                        .foregroundColor(.secondary)
+                }
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private func updateSprint(to sprint: JiraSprint?) {
+        Task {
+            var updateFields: [String: Any] = [:]
+
+            if let sprint = sprint {
+                updateFields["sprint"] = "\(sprint.id)"
+            } else {
+                // Moving to backlog - remove from sprint
+                updateFields["sprint"] = NSNull()
+            }
+
+            let success = await jiraService.updateIssue(
+                issueKey: issue.key,
+                fields: updateFields
+            )
+
+            if success {
+                Logger.shared.info("Updated sprint for \(issue.key) to \(sprint?.name ?? "Backlog")")
+            } else {
+                Logger.shared.error("Failed to update sprint for \(issue.key)")
+            }
+        }
     }
 }

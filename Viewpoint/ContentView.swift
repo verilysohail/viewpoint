@@ -620,6 +620,17 @@ struct IssueRow: View {
                     .font(scaledFont(.caption))
                     .foregroundColor(.secondary)
 
+                // Sprint or Backlog
+                if let sprints = issue.fields.sprint, !sprints.isEmpty, let firstSprint = sprints.first {
+                    Label(firstSprint.name, systemImage: "arrow.triangle.2.circlepath")
+                        .font(scaledFont(.caption))
+                        .foregroundColor(.orange)
+                } else {
+                    Label("Backlog", systemImage: "tray")
+                        .font(scaledFont(.caption))
+                        .foregroundColor(.gray)
+                }
+
                 if let assignee = issue.assignee {
                     Label(assignee, systemImage: "person")
                         .font(scaledFont(.caption))

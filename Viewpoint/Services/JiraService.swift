@@ -32,7 +32,7 @@ class JiraService: ObservableObject {
     @Published var epicSummaries: [String: String] = [:]
 
     // Sprint to project associations (sprint ID -> set of project keys)
-    private var sprintProjectMap: [Int: Set<String>] = [:]
+    var sprintProjectMap: [Int: Set<String>] = [:]
 
     // Current filters
     @Published var filters = IssueFilters()
