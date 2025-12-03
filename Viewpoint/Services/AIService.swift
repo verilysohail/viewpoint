@@ -152,7 +152,18 @@ class AIService {
 
         2. CREATE: Create new issues
            Format: `CREATE: project=X | summary=Y | type=Z | ...`
-           Example: CREATE: project=SETI | summary=Fix bug | type=Bug | assignee=\(context.currentUser) | components=Management Tasks
+           Available fields:
+           - project: Project key (required)
+           - summary: Issue summary (required)
+           - type: Issue type (Bug, Story, Task, etc.)
+           - assignee: User email (use \(context.currentUser) for yourself)
+           - estimate: Time estimate (e.g., "30m", "2h", "1d")
+           - sprint: Sprint name or "current" for active sprint
+           - epic: Epic name or key
+           - components: Component names (comma-separated)
+           - priority: Priority level
+           - labels: Labels (comma-separated)
+           Example: CREATE: project=SETI | summary=Fix bug | type=Bug | assignee=\(context.currentUser) | estimate=2h | sprint=current | components=Management Tasks
 
         3. UPDATE: Update issue fields (summary, description, assignee, priority, labels, components, estimates, sprint, epic, status)
            Format: `UPDATE: <key> | field=value | field2=value2`
@@ -198,7 +209,9 @@ class AIService {
         IMPORTANT:
         - Always explain what you're doing in plain language alongside the operation
         - You can update multiple fields in one UPDATE command
-        - For sprint, use "sprint=current" to assign to active sprint
+        - For sprint, use "sprint=current" to assign to the active sprint for that project
+        - When creating issues, the sprint will be automatically scoped to the project's board
+        - For estimates, use format like "30m", "2h", "1d" (minutes, hours, days)
         - Be concise and helpful
         - Confirm the operation after completion
 
@@ -227,6 +240,142 @@ class AIService {
             let assignee = issue.assignee ?? "Unassigned"
             return "\(issue.key) [\(issue.status), \(assignee)]: \(issue.summary)"
         }.joined(separator: "\n  ")
+    }
+
+    // MARK: - Field Validation and Mapping
+
+    func validateAndMapFields(userFields: [String: Any], projectKey: String, issueType: String = "Story") async -> (mappedFields: [String: Any]?, clarificationNeeded: String?) {
+        // Fetch metadata for this project/issue type
+        guard let metadata = await jiraService.fetchCreateMetadata(projectKey: projectKey, issueType: issueType) else {
+            Logger.shared.error("Failed to fetch field metadata for \(projectKey)/\(issueType)")
+            return (userFields, nil) // Fallback to original fields
+        }
+
+        // Build a summary of available fields for the LLM
+        var fieldDescriptions: [[String: Any]] = []
+        for (fieldKey, fieldData) in metadata {
+            guard let fieldDict = fieldData as? [String: Any] else { continue }
+
+            var description: [String: Any] = [
+                "key": fieldKey,
+                "name": fieldDict["name"] as? String ?? fieldKey,
+                "required": fieldDict["required"] as? Bool ?? false,
+                "schema": fieldDict["schema"] as Any
+            ]
+
+            // Add allowed values if present
+            if let allowedValues = fieldDict["allowedValues"] as? [[String: Any]] {
+                let values = allowedValues.compactMap { $0["name"] as? String ?? $0["value"] as? String }
+                description["allowedValues"] = values
+            }
+
+            fieldDescriptions.append(description)
+        }
+
+        // Convert to JSON for the LLM
+        guard let fieldDescriptionsData = try? JSONSerialization.data(withJSONObject: fieldDescriptions, options: [.prettyPrinted]),
+              let fieldDescriptionsJSON = String(data: fieldDescriptionsData, encoding: .utf8) else {
+            Logger.shared.error("Failed to serialize field descriptions")
+            return (userFields, nil)
+        }
+
+        // Use LLM to map user fields to Jira fields
+        let prompt = """
+        You are a field mapping expert for Jira. Given user-provided fields and the available Jira field schema, map the user's intent to the correct Jira field format.
+
+        USER PROVIDED FIELDS:
+        \(userFields.map { "\($0.key): \($0.value)" }.joined(separator: "\n"))
+
+        AVAILABLE JIRA FIELDS FOR \(projectKey)/\(issueType):
+        \(fieldDescriptionsJSON)
+
+        ADDITIONAL CONTEXT:
+        - Current user email: \(jiraService.config.jiraEmail)
+        - If user wants "current sprint", you need to return: sprint=current (this will be resolved server-side)
+        - Time estimates should be in Jira format: "30m", "2h", "1d"
+        - For assignee, use the email address provided
+
+        YOUR TASK:
+        1. Map each user field to the correct Jira field key
+        2. Validate that values are acceptable
+        3. Check if any required fields are missing
+        4. If anything is ambiguous or missing, respond with "CLARIFICATION_NEEDED: <your question>"
+        5. Otherwise, respond with valid JSON mapping in this format:
+
+        ```json
+        {
+          "fieldKey1": "value1",
+          "fieldKey2": "value2"
+        }
+        ```
+
+        For example:
+        - User's "estimate" or "originalEstimate" maps to "timetracking" field with format {"originalEstimate": "value"}
+        - User's "assignee" maps to "assignee" field
+        - User's "sprint" maps to "customfield_10020" (sprint field)
+        - User's "epic" maps to "customfield_10014" (epic field)
+        - User's "components" may need to be formatted as array of objects
+
+        RESPOND NOW:
+        """
+
+        // Make synchronous LLM call for field mapping
+        guard let client = client else {
+            Logger.shared.error("AI client not configured for field validation")
+            return (userFields, nil)
+        }
+
+        let semaphore = DispatchSemaphore(value: 0)
+        var mappingResult: String?
+        var mappingError: Error?
+
+        // Use the same client to make a mapping call
+        Task {
+            do {
+                let response = try await client.generateContent(prompt: prompt)
+                mappingResult = response
+                semaphore.signal()
+            } catch {
+                mappingError = error
+                semaphore.signal()
+            }
+        }
+
+        semaphore.wait()
+
+        if let error = mappingError {
+            Logger.shared.error("Field mapping LLM call failed: \(error)")
+            return (userFields, nil)
+        }
+
+        guard let result = mappingResult else {
+            Logger.shared.error("No result from field mapping LLM")
+            return (userFields, nil)
+        }
+
+        Logger.shared.info("Field mapping LLM response: \(result)")
+
+        // Check if clarification is needed
+        if result.contains("CLARIFICATION_NEEDED:") {
+            let clarification = result.replacingOccurrences(of: "CLARIFICATION_NEEDED:", with: "").trimmingCharacters(in: .whitespacesAndNewlines)
+            return (nil, clarification)
+        }
+
+        // Parse the JSON response
+        if let jsonStart = result.range(of: "```json"),
+           let jsonEnd = result.range(of: "```", range: jsonStart.upperBound..<result.endIndex) {
+            let jsonString = String(result[jsonStart.upperBound..<jsonEnd.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+
+            if let jsonData = jsonString.data(using: .utf8),
+               let mappedFields = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any] {
+                Logger.shared.info("Successfully mapped fields: \(mappedFields)")
+                return (mappedFields, nil)
+            }
+        }
+
+        // Fallback: use original fields
+        Logger.shared.warning("Could not parse LLM mapping response, using original fields")
+        return (userFields, nil)
     }
 
     // MARK: - Intent Parsing

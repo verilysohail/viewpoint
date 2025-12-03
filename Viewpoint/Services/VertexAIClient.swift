@@ -112,6 +112,46 @@ class VertexAIClient {
         return accessToken
     }
 
+    // MARK: - Non-Streaming Response (for validation/mapping)
+
+    func generateContent(prompt: String) async throws -> String {
+        let messages = [ChatMessage(role: .user, content: prompt)]
+        let endpoint = buildEndpoint()
+        let request = try buildRequest(endpoint: endpoint, messages: messages)
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw VertexAIError.invalidResponse
+        }
+
+        guard httpResponse.statusCode == 200 else {
+            throw VertexAIError.httpError(httpResponse.statusCode)
+        }
+
+        // Parse response
+        guard let jsonArray = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+            throw VertexAIError.invalidResponse
+        }
+
+        // Extract text from all chunks
+        var fullText = ""
+        for chunk in jsonArray {
+            if let candidates = chunk["candidates"] as? [[String: Any]],
+               let firstCandidate = candidates.first,
+               let content = firstCandidate["content"] as? [String: Any],
+               let parts = content["parts"] as? [[String: Any]] {
+                for part in parts {
+                    if let text = part["text"] as? String {
+                        fullText += text
+                    }
+                }
+            }
+        }
+
+        return fullText
+    }
+
     // MARK: - Streaming Response
 
     func streamCompletion(

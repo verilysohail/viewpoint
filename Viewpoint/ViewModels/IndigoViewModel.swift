@@ -202,27 +202,96 @@ class IndigoViewModel: ObservableObject {
                 text: "➕ Creating new issue: \(fields)",
                 sender: .system
             ))
-            let result = await jiraService.createIssue(fields: fields)
-            if result.success {
-                if let issueKey = result.issueKey {
-                    addMessage(Message(
-                        text: "✓ Successfully created issue \(issueKey)!",
-                        sender: .system,
-                        status: .success
-                    ))
-                } else {
-                    addMessage(Message(
-                        text: "✓ Issue created successfully!",
-                        sender: .system,
-                        status: .success
-                    ))
-                }
-            } else {
+
+            // Extract project key and issue type for validation
+            guard let projectKey = fields["project"] as? String else {
                 addMessage(Message(
-                    text: "✗ Failed to create issue. Check the logs for details.",
+                    text: "✗ Missing required field: project",
                     sender: .system,
                     status: .error
                 ))
+                return
+            }
+
+            let issueType = (fields["type"] as? String) ?? "Story"
+
+            // Validate and map fields using AI
+            if let aiService = aiService {
+                addMessage(Message(
+                    text: "🔍 Validating fields against Jira schema...",
+                    sender: .system
+                ))
+
+                let (mappedFields, clarification) = await aiService.validateAndMapFields(
+                    userFields: fields,
+                    projectKey: projectKey,
+                    issueType: issueType
+                )
+
+                // Check if clarification is needed
+                if let clarification = clarification {
+                    addMessage(Message(
+                        text: "❓ \(clarification)",
+                        sender: .system,
+                        status: .error
+                    ))
+                    return
+                }
+
+                // Use mapped fields if available, otherwise fall back to original
+                let fieldsToUse = mappedFields ?? fields
+
+                addMessage(Message(
+                    text: "✅ Fields validated. Creating issue...",
+                    sender: .system
+                ))
+
+                let result = await jiraService.createIssue(fields: fieldsToUse)
+                if result.success {
+                    if let issueKey = result.issueKey {
+                        addMessage(Message(
+                            text: "✓ Successfully created issue \(issueKey)!",
+                            sender: .system,
+                            status: .success
+                        ))
+                    } else {
+                        addMessage(Message(
+                            text: "✓ Issue created successfully!",
+                            sender: .system,
+                            status: .success
+                        ))
+                    }
+                } else {
+                    addMessage(Message(
+                        text: "✗ Failed to create issue. Check the logs for details.",
+                        sender: .system,
+                        status: .error
+                    ))
+                }
+            } else {
+                // Fallback: create without validation if AI service not available
+                let result = await jiraService.createIssue(fields: fields)
+                if result.success {
+                    if let issueKey = result.issueKey {
+                        addMessage(Message(
+                            text: "✓ Successfully created issue \(issueKey)!",
+                            sender: .system,
+                            status: .success
+                        ))
+                    } else {
+                        addMessage(Message(
+                            text: "✓ Issue created successfully!",
+                            sender: .system,
+                            status: .success
+                        ))
+                    }
+                } else {
+                    addMessage(Message(
+                        text: "✗ Failed to create issue. Check the logs for details.",
+                        sender: .system,
+                        status: .error
+                    ))
+                }
             }
 
         case .logWork(let issueKey, let timeSeconds):

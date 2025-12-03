@@ -10,7 +10,7 @@ class JiraService: ObservableObject {
     @Published var totalIssuesAvailable: Int = 0
     @Published var hasMoreIssues: Bool = false
 
-    private let config = Configuration.shared
+    let config = Configuration.shared
     private var cancellables = Set<AnyCancellable>()
     private var currentPageToken: String? = nil
 
@@ -31,6 +31,9 @@ class JiraService: ObservableObject {
     // Epic summaries (epic key -> summary)
     @Published var epicSummaries: [String: String] = [:]
 
+    // Sprint to project associations (sprint ID -> set of project keys)
+    private var sprintProjectMap: [Int: Set<String>] = [:]
+
     // Current filters
     @Published var filters = IssueFilters()
 
@@ -39,6 +42,12 @@ class JiraService: ObservableObject {
 
     // Current JQL query
     @Published var currentJQL: String?
+
+    // Current user's Jira account ID (cached)
+    private var currentUserAccountId: String? {
+        get { UserDefaults.standard.string(forKey: "jiraAccountId") }
+        set { UserDefaults.standard.set(newValue, forKey: "jiraAccountId") }
+    }
 
     // Filtered sprints based on selected projects and loaded issues
     var filteredSprints: [JiraSprint] {
@@ -104,21 +113,25 @@ class JiraService: ObservableObject {
         Task {
             // Only fetch metadata on initial load - no issues yet
             // Issues will be fetched when user selects a project or executes JQL
-            Logger.shared.info("Loading initial data (projects and sprints only, no issues)")
+            Logger.shared.info("Loading initial data (projects, sprints, and current user)")
 
             async let projectsFetch = fetchAvailableProjects()
             async let sprintsFetch = fetchSprints()
+            async let currentUserFetch = fetchCurrentUser()
 
             // Wait for filter options to load
             await projectsFetch
             await sprintsFetch
+            await currentUserFetch
 
             Logger.shared.info("Initial data loaded successfully")
         }
     }
 
     func refresh() {
-        loadInitialData()
+        Task {
+            await fetchMyIssues(updateAvailableOptions: true)
+        }
     }
 
     // MARK: - API Requests
@@ -486,13 +499,33 @@ class JiraService: ObservableObject {
 
                 Logger.shared.info("Found \(values.count) boards")
 
-                // Fetch sprints from all boards concurrently
+                // Fetch sprints from all boards and track project associations
                 var allSprints: [JiraSprint] = []
 
                 for board in values {
                     if let boardId = board["id"] as? Int {
+                        // Extract project key(s) from board location
+                        var projectKeys: Set<String> = []
+                        if let location = board["location"] as? [String: Any],
+                           let projectKey = location["projectKey"] as? String {
+                            projectKeys.insert(projectKey)
+                        }
+
                         let boardSprints = await fetchSprintsForBoard(boardId: boardId)
                         allSprints.append(contentsOf: boardSprints)
+
+                        // Associate these sprints with the board's project(s)
+                        for sprint in boardSprints {
+                            if !projectKeys.isEmpty {
+                                await MainActor.run {
+                                    if self.sprintProjectMap[sprint.id] == nil {
+                                        self.sprintProjectMap[sprint.id] = projectKeys
+                                    } else {
+                                        self.sprintProjectMap[sprint.id]?.formUnion(projectKeys)
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
 
@@ -551,6 +584,40 @@ class JiraService: ObservableObject {
             }
         } catch {
             Logger.shared.error("Failed to fetch projects: \(error)")
+        }
+    }
+
+    func fetchCurrentUser() async {
+        // Skip if already cached
+        if currentUserAccountId != nil {
+            Logger.shared.info("Using cached account ID: \(currentUserAccountId!)")
+            return
+        }
+
+        let urlString = "\(config.jiraBaseURL)/rest/api/3/myself"
+        guard let url = URL(string: urlString) else { return }
+
+        let request = createRequest(url: url)
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw URLError(.badServerResponse)
+            }
+
+            Logger.shared.info("Fetch current user response status: \(httpResponse.statusCode)")
+
+            if httpResponse.statusCode == 200,
+               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let accountId = json["accountId"] as? String {
+                currentUserAccountId = accountId
+                Logger.shared.info("Cached current user account ID: \(accountId)")
+            } else {
+                Logger.shared.error("Failed to fetch current user account ID")
+            }
+        } catch {
+            Logger.shared.error("Failed to fetch current user: \(error)")
         }
     }
 
@@ -1587,6 +1654,48 @@ class JiraService: ObservableObject {
         return text.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    func fetchCreateMetadata(projectKey: String, issueType: String = "Story") async -> [String: Any]? {
+        let urlString = "\(config.jiraBaseURL)/rest/api/3/issue/createmeta?projectKeys=\(projectKey)&issuetypeNames=\(issueType)&expand=projects.issuetypes.fields"
+
+        guard let url = URL(string: urlString.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? urlString) else {
+            Logger.shared.error("Invalid URL for fetching create metadata")
+            return nil
+        }
+
+        let request = createRequest(url: url)
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw URLError(.badServerResponse)
+            }
+
+            Logger.shared.info("Fetch create metadata response status: \(httpResponse.statusCode)")
+
+            if httpResponse.statusCode == 200,
+               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let projects = json["projects"] as? [[String: Any]],
+               let project = projects.first,
+               let issuetypes = project["issuetypes"] as? [[String: Any]],
+               let issuetype = issuetypes.first,
+               let fields = issuetype["fields"] as? [String: Any] {
+
+                Logger.shared.info("Fetched \(fields.count) field definitions for \(projectKey)/\(issueType)")
+                return fields
+            } else {
+                Logger.shared.error("Failed to parse create metadata")
+                if let jsonString = String(data: data, encoding: .utf8) {
+                    Logger.shared.error("Response: \(jsonString.prefix(500))")
+                }
+            }
+        } catch {
+            Logger.shared.error("Failed to fetch create metadata: \(error)")
+        }
+
+        return nil
+    }
+
     func createIssue(fields: [String: Any]) async -> (success: Bool, issueKey: String?) {
         let urlString = "\(config.jiraBaseURL)/rest/api/3/issue"
 
@@ -1601,8 +1710,11 @@ class JiraService: ObservableObject {
         // Map AI fields to Jira API format
         var jiraFields: [String: Any] = [:]
 
-        // Required: Project
-        if let projectKey = fields["project"] as? String {
+        // Required: Project (accept both string and dict format)
+        if let projectDict = fields["project"] as? [String: Any] {
+            // Already in Jira format
+            jiraFields["project"] = projectDict
+        } else if let projectKey = fields["project"] as? String {
             jiraFields["project"] = ["key": projectKey]
         } else {
             Logger.shared.error("Missing required field: project")
@@ -1617,40 +1729,99 @@ class JiraService: ObservableObject {
             return (false, nil)
         }
 
-        // Required: Issue Type
-        if let issueType = fields["type"] as? String {
+        // Required: Issue Type (accept both string and dict format)
+        if let issueTypeDict = fields["issuetype"] as? [String: Any] {
+            jiraFields["issuetype"] = issueTypeDict
+        } else if let issueType = fields["type"] as? String {
             jiraFields["issuetype"] = ["name": issueType]
         } else {
             // Default to Story if not specified
             jiraFields["issuetype"] = ["name": "Story"]
         }
 
-        // Optional: Assignee (use email or accountId)
-        if let assignee = fields["assignee"] as? String {
-            // Try to use email first, fallback to accountId
-            jiraFields["assignee"] = ["emailAddress": assignee]
+        // Optional: Assignee (accept both string and dict format)
+        if let assigneeDict = fields["assignee"] as? [String: Any] {
+            // Check if it's the current user and we have accountId
+            if let name = assigneeDict["name"] as? String,
+               name == config.jiraEmail,
+               let accountId = currentUserAccountId {
+                jiraFields["assignee"] = ["accountId": accountId]
+                Logger.shared.info("Using accountId for assignee: \(accountId)")
+            } else {
+                // Use the dict as-is
+                jiraFields["assignee"] = assigneeDict
+            }
+        } else if let assignee = fields["assignee"] as? String {
+            // Check if this is the current user
+            if assignee == config.jiraEmail, let accountId = currentUserAccountId {
+                // Use accountId for current user
+                jiraFields["assignee"] = ["accountId": accountId]
+                Logger.shared.info("Using accountId for assignee: \(accountId)")
+            } else {
+                // For other users, try email
+                jiraFields["assignee"] = ["emailAddress": assignee]
+                Logger.shared.info("Using email for assignee: \(assignee)")
+            }
         }
 
-        // Optional: Original Estimate
-        if let estimateStr = fields["originalEstimate"] as? String {
+        // Optional: Original Estimate (accept dict format from LLM or simple string)
+        if let timetrackingDict = fields["timetracking"] as? [String: Any] {
+            jiraFields["timetracking"] = timetrackingDict
+        } else if let estimateStr = (fields["originalEstimate"] as? String) ?? (fields["estimate"] as? String) {
             // Convert "1.5h" or "1h 30m" to Jira format
             jiraFields["timetracking"] = ["originalEstimate": estimateStr]
         }
 
-        // Optional: Sprint (needs sprint ID)
-        if let sprintValue = fields["sprint"] as? String {
-            if sprintValue.lowercased() == "current" {
-                // Find the currently active sprint
-                let activeSprints = await MainActor.run {
-                    self.availableSprints.filter { $0.state.lowercased() == "active" }
+        // Optional: Sprint (accept customfield_10020 directly or resolve from sprint name)
+        if let customfieldValue = fields["customfield_10020"] {
+            if let sprintString = customfieldValue as? String, sprintString.lowercased() == "current" {
+                // Resolve "current" to actual sprint ID
+                let projectKey: String?
+                if let projectDict = fields["project"] as? [String: Any] {
+                    projectKey = projectDict["key"] as? String
+                } else {
+                    projectKey = fields["project"] as? String
                 }
-                if let currentSprint = activeSprints.first {
-                    jiraFields["customfield_10020"] = currentSprint.id
-                    Logger.shared.info("Using current sprint: \(currentSprint.name) (ID: \(currentSprint.id))")
+
+                let activeSprint = await findActiveSprintForProject(projectKey: projectKey)
+                if let sprint = activeSprint {
+                    jiraFields["customfield_10020"] = sprint.id
+                    Logger.shared.info("Using current sprint for project \(projectKey ?? "unknown"): \(sprint.name) (ID: \(sprint.id))")
+                } else {
+                    Logger.shared.warning("Could not find active sprint for project: \(projectKey ?? "unknown")")
                 }
             } else {
-                // Try to find sprint by name
-                let matchingSprint = await findSprintByName(sprintValue)
+                // Already an ID or other value, use as-is
+                jiraFields["customfield_10020"] = customfieldValue
+            }
+        } else if let sprintValue = fields["sprint"] as? String {
+            if sprintValue.lowercased() == "current" {
+                // Find the currently active sprint for this project
+                let projectKey: String?
+                if let projectDict = fields["project"] as? [String: Any] {
+                    projectKey = projectDict["key"] as? String
+                } else {
+                    projectKey = fields["project"] as? String
+                }
+
+                let activeSprint = await findActiveSprintForProject(projectKey: projectKey)
+
+                if let sprint = activeSprint {
+                    jiraFields["customfield_10020"] = sprint.id
+                    Logger.shared.info("Using current sprint for project \(projectKey ?? "unknown"): \(sprint.name) (ID: \(sprint.id))")
+                } else {
+                    Logger.shared.warning("Could not find active sprint for project: \(projectKey ?? "unknown")")
+                }
+            } else {
+                // Try to find sprint by name (optionally scoped to project)
+                let projectKey: String?
+                if let projectDict = fields["project"] as? [String: Any] {
+                    projectKey = projectDict["key"] as? String
+                } else {
+                    projectKey = fields["project"] as? String
+                }
+
+                let matchingSprint = await findSprintByName(sprintValue, projectKey: projectKey)
                 if let sprint = matchingSprint {
                     jiraFields["customfield_10020"] = sprint.id
                     Logger.shared.info("Matched sprint '\(sprintValue)' to: \(sprint.name) (ID: \(sprint.id))")
@@ -1674,8 +1845,11 @@ class JiraService: ObservableObject {
             }
         }
 
-        // Optional: Components
-        if let components = fields["components"] as? [String] {
+        // Optional: Components (accept array of dicts or array of strings)
+        if let componentsArray = fields["components"] as? [[String: Any]] {
+            // Already in Jira format
+            jiraFields["components"] = componentsArray
+        } else if let components = fields["components"] as? [String] {
             // Smart lookup for each component
             var resolvedComponents: [[String: String]] = []
             for componentQuery in components {
@@ -1709,6 +1883,26 @@ class JiraService: ObservableObject {
                 // Fallback to literal "Management Tasks" if not found in available components
                 jiraFields["components"] = [["name": "Management Tasks"]]
                 Logger.shared.warning("Management Tasks component not found in loaded issues, using literal value")
+            }
+        }
+
+        // Optional: Reporter (accept dict format from LLM, fix to use accountId)
+        if let reporterDict = fields["reporter"] as? [String: Any] {
+            // Check if it's the current user and we have accountId
+            if let name = reporterDict["name"] as? String,
+               name == config.jiraEmail,
+               let accountId = currentUserAccountId {
+                jiraFields["reporter"] = ["accountId": accountId]
+                Logger.shared.info("Using accountId for reporter: \(accountId)")
+            } else {
+                // Use the dict as-is (but this might fail)
+                jiraFields["reporter"] = reporterDict
+            }
+        } else if let reporter = fields["reporter"] as? String {
+            // Check if this is the current user
+            if reporter == config.jiraEmail, let accountId = currentUserAccountId {
+                jiraFields["reporter"] = ["accountId": accountId]
+                Logger.shared.info("Using accountId for reporter: \(accountId)")
             }
         }
 
@@ -1749,8 +1943,89 @@ class JiraService: ObservableObject {
 
     // MARK: - Semantic Search Helpers
 
-    func findSprintByName(_ query: String) async -> JiraSprint? {
-        let sprints = await MainActor.run { self.availableSprints }
+    func findActiveSprintForProject(projectKey: String?) async -> JiraSprint? {
+        guard let projectKey = projectKey else {
+            Logger.shared.warning("No project key provided for finding active sprint")
+            return nil
+        }
+
+        // Get all cached sprints
+        let allSprints = await MainActor.run { self.availableSprints }
+
+        // Strategy 1: Use sprint-project map if available
+        let sprintMap = await MainActor.run { self.sprintProjectMap }
+        let activeSprintsForProject = allSprints.filter { sprint in
+            sprint.state.lowercased() == "active" &&
+            (sprintMap[sprint.id]?.contains(projectKey) ?? false)
+        }
+
+        if let activeSprint = activeSprintsForProject.first {
+            Logger.shared.info("Found active sprint for project \(projectKey) via mapping: \(activeSprint.name) (ID: \(activeSprint.id))")
+            return activeSprint
+        }
+
+        // Strategy 2: Fallback to name pattern matching
+        // Many sprint names include the project key (e.g., "SETI Sprint 24", "WF-Y25-Q4-S24")
+        let activeSprintsByName = allSprints.filter { sprint in
+            sprint.state.lowercased() == "active" &&
+            sprint.name.uppercased().contains(projectKey.uppercased())
+        }
+
+        if let activeSprint = activeSprintsByName.first {
+            Logger.shared.info("Found active sprint for project \(projectKey) via name pattern: \(activeSprint.name) (ID: \(activeSprint.id))")
+            return activeSprint
+        }
+
+        // Strategy 3: Query the project's issues to see which sprint they're in
+        // This is a last resort - query for one issue from this project and see what sprint it's in
+        let jql = "project = \(projectKey) AND sprint in openSprints() ORDER BY created DESC"
+        let urlString = "\(config.jiraBaseURL)/rest/api/3/search/jql?jql=\(jql)&maxResults=1&fields=customfield_10020"
+
+        guard let encodedURL = urlString.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+              let url = URL(string: encodedURL) else {
+            Logger.shared.warning("Could not find active sprint for project \(projectKey)")
+            return nil
+        }
+
+        let request = createRequest(url: url)
+
+        do {
+            let (data, _) = try await URLSession.shared.data(for: request)
+
+            if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let issues = json["issues"] as? [[String: Any]],
+               let firstIssue = issues.first,
+               let fields = firstIssue["fields"] as? [String: Any],
+               let sprintData = fields["customfield_10020"] as? [[String: Any]],
+               let activeSprint = sprintData.first(where: { ($0["state"] as? String)?.lowercased() == "active" }),
+               let sprintId = activeSprint["id"] as? Int {
+
+                // Find this sprint in our cached sprints
+                if let sprint = allSprints.first(where: { $0.id == sprintId }) {
+                    Logger.shared.info("Found active sprint for project \(projectKey) via issue query: \(sprint.name) (ID: \(sprint.id))")
+                    return sprint
+                }
+            }
+        } catch {
+            Logger.shared.error("Failed to query issues for active sprint: \(error)")
+        }
+
+        Logger.shared.warning("Could not find active sprint for project \(projectKey)")
+        return nil
+    }
+
+    func findSprintByName(_ query: String, projectKey: String? = nil) async -> JiraSprint? {
+        var sprints = await MainActor.run { self.availableSprints }
+
+        // If projectKey is provided, try to filter sprints to that project's board first
+        if let projectKey = projectKey {
+            let projectSprints = await fetchSprintsForProject(projectKey: projectKey)
+            if !projectSprints.isEmpty {
+                sprints = projectSprints
+                Logger.shared.info("Searching for sprint '\(query)' in project \(projectKey) (\(sprints.count) sprints)")
+            }
+        }
+
         let lowercaseQuery = query.lowercased()
 
         // First try exact match
@@ -1781,6 +2056,29 @@ class JiraService: ObservableObject {
 
         // Only return if at least one word matched
         return bestScore > 0 ? bestMatch : nil
+    }
+
+    private func fetchSprintsForProject(projectKey: String) async -> [JiraSprint] {
+        let urlString = "\(config.jiraBaseURL)/rest/agile/1.0/board?projectKeyOrId=\(projectKey)"
+        guard let url = URL(string: urlString) else { return [] }
+
+        let request = createRequest(url: url)
+
+        do {
+            let (data, _) = try await URLSession.shared.data(for: request)
+
+            if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let boards = json["values"] as? [[String: Any]],
+               let firstBoard = boards.first,
+               let boardId = firstBoard["id"] as? Int {
+
+                return await fetchSprintsForBoard(boardId: boardId)
+            }
+        } catch {
+            Logger.shared.error("Failed to fetch sprints for project \(projectKey): \(error)")
+        }
+
+        return []
     }
 
     func findEpicByName(_ query: String) async -> String? {
