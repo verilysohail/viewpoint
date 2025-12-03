@@ -621,7 +621,7 @@ struct IssueRow: View {
                     .foregroundColor(.secondary)
 
                 // Sprint or Backlog
-                if let sprints = issue.fields.sprint, !sprints.isEmpty, let firstSprint = sprints.first {
+                if let sprints = issue.fields.customfield_10020, !sprints.isEmpty, let firstSprint = sprints.first {
                     Label(firstSprint.name, systemImage: "arrow.triangle.2.circlepath")
                         .font(scaledFont(.caption))
                         .foregroundColor(.orange)

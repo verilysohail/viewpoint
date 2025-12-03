@@ -144,7 +144,7 @@ struct IssueDetailView: View {
                     metadataItem(label: "Priority", value: priority, color: priorityColor(for: priority))
                 }
                 metadataItem(label: "Project", value: issueDetails.issue.project, color: .secondary)
-                SprintSelector(issue: issueDetails.issue)
+                IssueSprintSelector(issue: issueDetails.issue)
             }
         }
         .padding()
@@ -405,9 +405,9 @@ struct CommentView: View {
     }
 }
 
-// MARK: - Sprint Selector
+// MARK: - Issue Sprint Selector
 
-struct SprintSelector: View {
+struct IssueSprintSelector: View {
     let issue: JiraIssue
     @EnvironmentObject var jiraService: JiraService
     @State private var selectedSprintName: String = ""
@@ -415,7 +415,7 @@ struct SprintSelector: View {
     @State private var searchText: String = ""
 
     private var currentSprintName: String {
-        if let sprints = issue.fields.sprint, !sprints.isEmpty, let firstSprint = sprints.first {
+        if let sprints = issue.fields.customfield_10020, !sprints.isEmpty, let firstSprint = sprints.first {
             return firstSprint.name
         }
         return "Backlog"
