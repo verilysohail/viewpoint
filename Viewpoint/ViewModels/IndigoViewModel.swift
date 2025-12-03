@@ -215,6 +215,43 @@ class IndigoViewModel: ObservableObject {
 
             let issueType = (fields["type"] as? String) ?? "Story"
 
+            // Check if user requested "current" sprint - if so, resolve ambiguity first
+            var fieldsToValidate = fields
+            if let sprintValue = fields["sprint"] as? String,
+               sprintValue.lowercased() == "current" {
+
+                // Find all active sprints for this project
+                let activeSprints = await jiraService.findActiveSprintsForProject(projectKey: projectKey)
+
+                if activeSprints.count > 1 {
+                    // Multiple active sprints - ask user which one
+                    let sprintList = activeSprints.map { "\($0.name) (ID: \($0.id))" }.joined(separator: ", ")
+                    addMessage(Message(
+                        text: "❓ I found \(activeSprints.count) active sprints for \(projectKey): \(sprintList). Please specify which sprint you want to use.",
+                        sender: .system,
+                        status: .error
+                    ))
+                    return
+                } else if activeSprints.count == 1 {
+                    // Exactly one sprint - use it
+                    addMessage(Message(
+                        text: "✓ Found active sprint: \(activeSprints[0].name)",
+                        sender: .system
+                    ))
+                } else {
+                    // No active sprints found
+                    addMessage(Message(
+                        text: "⚠️ No active sprint found for \(projectKey). Creating issue without sprint assignment.",
+                        sender: .system,
+                        status: .error
+                    ))
+                    // Remove sprint from fields
+                    var mutableFields = fields
+                    mutableFields.removeValue(forKey: "sprint")
+                    fieldsToValidate = mutableFields
+                }
+            }
+
             // Validate and map fields using AI
             if let aiService = aiService {
                 addMessage(Message(
@@ -223,7 +260,7 @@ class IndigoViewModel: ObservableObject {
                 ))
 
                 let (mappedFields, clarification) = await aiService.validateAndMapFields(
-                    userFields: fields,
+                    userFields: fieldsToValidate,
                     projectKey: projectKey,
                     issueType: issueType
                 )
@@ -239,7 +276,7 @@ class IndigoViewModel: ObservableObject {
                 }
 
                 // Use mapped fields if available, otherwise fall back to original
-                let fieldsToUse = mappedFields ?? fields
+                let fieldsToUse = mappedFields ?? fieldsToValidate
 
                 addMessage(Message(
                     text: "✅ Fields validated. Creating issue...",

@@ -1,0 +1,295 @@
+[2025-12-02 14:09:32.276] [INFO] [Logger.swift:39] === Viewpoint started ===
+[2025-12-02 14:09:32.278] [INFO] [Logger.swift:40] Log file: /Users/smamdani/Library/Containers/com.smamdani.Viewpoint/Data/Library/Application Support/Viewpoint/viewpoint.log
+[2025-12-02 14:09:32.278] [INFO] [Configuration.swift:22] Configuration loaded from UserDefaults/Keychain
+[2025-12-02 14:09:32.278] [INFO] [Configuration.swift:23]   Base URL: 'https://verily.atlassian.net'
+[2025-12-02 14:09:32.278] [INFO] [Configuration.swift:24]   Email: 'smamdani@verily.health'
+[2025-12-02 14:09:32.278] [INFO] [Configuration.swift:25]   API Key present: true
+[2025-12-02 14:09:32.281] [INFO] [JiraService.swift:107] Loading initial data (projects and sprints only, no issues)
+[2025-12-02 14:09:32.329] [INFO] [SavedView.swift:44] Loaded 2 saved views
+Unable to obtain a task name port right for pid 607: (os/kern) failure (0x5)
+[2025-12-02 14:09:33.655] [INFO] [JiraService.swift:489] Found 50 boards
+[2025-12-02 14:09:34.098] [INFO] [JiraService.swift:569] Board 20 has 7 sprints
+[2025-12-02 14:09:34.165] [INFO] [JiraService.swift:535] Fetch projects response status: 200
+[2025-12-02 14:09:34.166] [INFO] [JiraService.swift:548] Found 156 accessible projects
+[2025-12-02 14:09:34.404] [ERROR] [JiraService.swift:572] Failed to fetch sprints for board 14: keyNotFound(CodingKeys(stringValue: "values", intValue: nil), Swift.DecodingError.Context(codingPath: [], debugDescription: "No value associated with key CodingKeys(stringValue: \"values\", intValue: nil) (\"values\").", underlyingError: nil))
+[2025-12-02 14:09:35.320] [INFO] [JiraService.swift:569] Board 23 has 8 sprints
+[2025-12-02 14:09:35.732] [INFO] [JiraService.swift:569] Board 112 has 7 sprints
+[2025-12-02 14:09:36.169] [INFO] [JiraService.swift:569] Board 551 has 36 sprints
+[2025-12-02 14:09:36.579] [INFO] [JiraService.swift:569] Board 108 has 41 sprints
+[2025-12-02 14:09:36.871] [ERROR] [JiraService.swift:572] Failed to fetch sprints for board 418: keyNotFound(CodingKeys(stringValue: "values", intValue: nil), Swift.DecodingError.Context(codingPath: [], debugDescription: "No value associated with key CodingKeys(stringValue: \"values\", intValue: nil) (\"values\").", underlyingError: nil))
+[2025-12-02 14:09:38.164] [INFO] [JiraService.swift:99] Saved filters: IssueFilters(statuses: Set([]), assignees: Set(["Sohail Mamdani"]), issueTypes: Set(["Story"]), projects: Set(["Systems Engineering and Technology Integration"]), epics: Set([]), sprints: Set([14120]), startDate: nil, endDate: nil, showOnlyMyIssues: false)
+[2025-12-02 14:09:38.164] [INFO] [JiraService.swift:99] Saved filters: IssueFilters(statuses: Set([]), assignees: Set(["Sohail Mamdani"]), issueTypes: Set(["Story"]), projects: Set(["Systems Engineering and Technology Integration"]), epics: Set([]), sprints: Set([14120]), startDate: nil, endDate: nil, showOnlyMyIssues: false)
+[2025-12-02 14:09:38.164] [INFO] [SavedView.swift:101] Applied view: My Stories This Sprint
+ViewBridge to RemoteViewService Terminated: Error Domain=com.apple.ViewBridge Code=18 "(null)" UserInfo={com.apple.ViewBridge.error.hint=this process disconnected remote view controller -- benign unless unexpected, com.apple.ViewBridge.error.description=NSViewBridgeErrorCanceled}
+[2025-12-02 14:09:38.519] [INFO] [JiraService.swift:161] JQL: project IN ("Systems Engineering and Technology Integration") AND assignee IN ("Sohail Mamdani") AND type IN ("Story") AND sprint IN (14120) order by created DESC
+[2025-12-02 14:09:38.520] [INFO] [JiraService.swift:162] Fetching up to 100 more issues, pageToken: none
+[2025-12-02 14:09:38.520] [INFO] [JiraService.swift:191] Fetching issues from: https://verily.atlassian.net/rest/api/3/search/jql?jql=project%20IN%20(%22Systems%20Engineering%20and%20Technology%20Integration%22)%20AND%20assignee%20IN%20(%22Sohail%20Mamdani%22)%20AND%20type%20IN%20(%22Story%22)%20AND%20sprint%20IN%20(14120)%20order%20by%20created%20DESC&maxResults=100&fields=summary,status,assignee,issuetype,project,priority,created,updated,components,customfield_10014,customfield_10016,customfield_10020,timeoriginalestimate,timespent,timeestimate
+[2025-12-02 14:09:38.935] [INFO] [JiraService.swift:202] Response status: 200
+[2025-12-02 14:09:38.948] [INFO] [JiraService.swift:222] Fetched 6 issues (loaded so far: 6, hasMore: false)
+[2025-12-02 14:09:38.948] [INFO] [JiraService.swift:226] Successfully fetched 6 total issues
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+[2025-12-02 14:09:46.009] [INFO] [JiraService.swift:569] Board 582 has 38 sprints
+[2025-12-02 14:09:46.515] [INFO] [JiraService.swift:569] Board 80 has 50 sprints
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+[2025-12-02 14:09:47.246] [ERROR] [JiraService.swift:572] Failed to fetch sprints for board 68: keyNotFound(CodingKeys(stringValue: "values", intValue: nil), Swift.DecodingError.Context(codingPath: [], debugDescription: "No value associated with key CodingKeys(stringValue: \"values\", intValue: nil) (\"values\").", underlyingError: nil))
+[2025-12-02 14:09:47.516] [ERROR] [JiraService.swift:572] Failed to fetch sprints for board 197: keyNotFound(CodingKeys(stringValue: "values", intValue: nil), Swift.DecodingError.Context(codingPath: [], debugDescription: "No value associated with key CodingKeys(stringValue: \"values\", intValue: nil) (\"values\").", underlyingError: nil))
+[2025-12-02 14:09:48.047] [INFO] [JiraService.swift:569] Board 258 has 50 sprints
+[2025-12-02 14:09:48.586] [INFO] [JiraService.swift:569] Board 64 has 50 sprints
+[2025-12-02 14:09:48.968] [ERROR] [JiraService.swift:572] Failed to fetch sprints for board 52: keyNotFound(CodingKeys(stringValue: "values", intValue: nil), Swift.DecodingError.Context(codingPath: [], debugDescription: "No value associated with key CodingKeys(stringValue: \"values\", intValue: nil) (\"values\").", underlyingError: nil))
+[2025-12-02 14:09:49.241] [ERROR] [JiraService.swift:572] Failed to fetch sprints for board 261: keyNotFound(CodingKeys(stringValue: "values", intValue: nil), Swift.DecodingError.Context(codingPath: [], debugDescription: "No value associated with key CodingKeys(stringValue: \"values\", intValue: nil) (\"values\").", underlyingError: nil))
+[2025-12-02 14:09:49.519] [ERROR] [JiraService.swift:572] Failed to fetch sprints for board 198: keyNotFound(CodingKeys(stringValue: "values", intValue: nil), Swift.DecodingError.Context(codingPath: [], debugDescription: "No value associated with key CodingKeys(stringValue: \"values\", intValue: nil) (\"values\").", underlyingError: nil))
+[2025-12-02 14:09:50.312] [INFO] [JiraService.swift:569] Board 9 has 49 sprints
+[2025-12-02 14:09:51.658] [INFO] [AIService.swift:37] AI Service configured with model: Gemini 3 Pro Preview (Best Quality) using gcloud auth
+[2025-12-02 14:09:52.631] [INFO] [JiraService.swift:569] Board 45 has 50 sprints
+[2025-12-02 14:09:52.934] [ERROR] [JiraService.swift:572] Failed to fetch sprints for board 113: keyNotFound(CodingKeys(stringValue: "values", intValue: nil), Swift.DecodingError.Context(codingPath: [], debugDescription: "No value associated with key CodingKeys(stringValue: \"values\", intValue: nil) (\"values\").", underlyingError: nil))
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+[2025-12-02 14:09:53.708] [ERROR] [JiraService.swift:572] Failed to fetch sprints for board 399: keyNotFound(CodingKeys(stringValue: "values", intValue: nil), Swift.DecodingError.Context(codingPath: [], debugDescription: "No value associated with key CodingKeys(stringValue: \"values\", intValue: nil) (\"values\").", underlyingError: nil))
+[2025-12-02 14:09:54.497] [INFO] [JiraService.swift:569] Board 78 has 7 sprints
+[2025-12-02 14:09:54.910] [INFO] [JiraService.swift:569] Board 48 has 46 sprints
+[2025-12-02 14:09:55.233] [ERROR] [JiraService.swift:572] Failed to fetch sprints for board 81: keyNotFound(CodingKeys(stringValue: "values", intValue: nil), Swift.DecodingError.Context(codingPath: [], debugDescription: "No value associated with key CodingKeys(stringValue: \"values\", intValue: nil) (\"values\").", underlyingError: nil))
+[2025-12-02 14:09:55.627] [INFO] [JiraService.swift:569] Board 18 has 2 sprints
+[2025-12-02 14:09:56.443] [ERROR] [JiraService.swift:572] Failed to fetch sprints for board 17: keyNotFound(CodingKeys(stringValue: "values", intValue: nil), Swift.DecodingError.Context(codingPath: [], debugDescription: "No value associated with key CodingKeys(stringValue: \"values\", intValue: nil) (\"values\").", underlyingError: nil))
+[2025-12-02 14:09:57.332] [INFO] [JiraService.swift:569] Board 59 has 0 sprints
+[2025-12-02 14:09:57.728] [INFO] [JiraService.swift:569] Board 260 has 5 sprints
+[2025-12-02 14:09:58.459] [ERROR] [JiraService.swift:572] Failed to fetch sprints for board 721: keyNotFound(CodingKeys(stringValue: "values", intValue: nil), Swift.DecodingError.Context(codingPath: [], debugDescription: "No value associated with key CodingKeys(stringValue: \"values\", intValue: nil) (\"values\").", underlyingError: nil))
+[2025-12-02 14:09:59.304] [INFO] [JiraService.swift:569] Board 104 has 40 sprints
+[2025-12-02 14:09:59.748] [INFO] [JiraService.swift:569] Board 65 has 50 sprints
+[2025-12-02 14:10:00.230] [INFO] [JiraService.swift:569] Board 82 has 50 sprints
+[2025-12-02 14:10:00.685] [INFO] [JiraService.swift:569] Board 3394 has 4 sprints
+[2025-12-02 14:10:01.179] [INFO] [JiraService.swift:569] Board 129 has 50 sprints
+[2025-12-02 14:10:01.445] [ERROR] [JiraService.swift:572] Failed to fetch sprints for board 720: keyNotFound(CodingKeys(stringValue: "values", intValue: nil), Swift.DecodingError.Context(codingPath: [], debugDescription: "No value associated with key CodingKeys(stringValue: \"values\", intValue: nil) (\"values\").", underlyingError: nil))
+[2025-12-02 14:10:01.938] [INFO] [JiraService.swift:569] Board 61 has 50 sprints
+[2025-12-02 14:10:02.690] [ERROR] [JiraService.swift:572] Failed to fetch sprints for board 1480: keyNotFound(CodingKeys(stringValue: "values", intValue: nil), Swift.DecodingError.Context(codingPath: [], debugDescription: "No value associated with key CodingKeys(stringValue: \"values\", intValue: nil) (\"values\").", underlyingError: nil))
+[2025-12-02 14:10:03.089] [INFO] [JiraService.swift:569] Board 91 has 50 sprints
+[2025-12-02 14:10:03.512] [INFO] [JiraService.swift:569] Board 74 has 40 sprints
+[2025-12-02 14:10:03.917] [ERROR] [JiraService.swift:572] Failed to fetch sprints for board 722: keyNotFound(CodingKeys(stringValue: "values", intValue: nil), Swift.DecodingError.Context(codingPath: [], debugDescription: "No value associated with key CodingKeys(stringValue: \"values\", intValue: nil) (\"values\").", underlyingError: nil))
+[2025-12-02 14:10:04.670] [ERROR] [JiraService.swift:572] Failed to fetch sprints for board 101: keyNotFound(CodingKeys(stringValue: "values", intValue: nil), Swift.DecodingError.Context(codingPath: [], debugDescription: "No value associated with key CodingKeys(stringValue: \"values\", intValue: nil) (\"values\").", underlyingError: nil))
+[2025-12-02 14:10:05.047] [INFO] [JiraService.swift:569] Board 93 has 44 sprints
+[2025-12-02 14:10:05.455] [INFO] [JiraService.swift:569] Board 212 has 50 sprints
+[2025-12-02 14:10:05.723] [ERROR] [JiraService.swift:572] Failed to fetch sprints for board 116: keyNotFound(CodingKeys(stringValue: "values", intValue: nil), Swift.DecodingError.Context(codingPath: [], debugDescription: "No value associated with key CodingKeys(stringValue: \"values\", intValue: nil) (\"values\").", underlyingError: nil))
+[2025-12-02 14:10:05.999] [ERROR] [JiraService.swift:572] Failed to fetch sprints for board 3891: keyNotFound(CodingKeys(stringValue: "values", intValue: nil), Swift.DecodingError.Context(codingPath: [], debugDescription: "No value associated with key CodingKeys(stringValue: \"values\", intValue: nil) (\"values\").", underlyingError: nil))
+[2025-12-02 14:10:06.400] [INFO] [JiraService.swift:569] Board 47 has 50 sprints
+[2025-12-02 14:10:07.399] [INFO] [JiraService.swift:569] Board 100 has 10 sprints
+[2025-12-02 14:10:07.739] [INFO] [JiraService.swift:569] Board 3427 has 1 sprints
+[2025-12-02 14:10:08.135] [INFO] [JiraService.swift:569] Board 103 has 6 sprints
+[2025-12-02 14:10:08.614] [INFO] [JiraService.swift:569] Board 413 has 5 sprints
+[2025-12-02 14:10:09.032] [INFO] [JiraService.swift:569] Board 119 has 4 sprints
+[2025-12-02 14:10:09.040] [INFO] [JiraService.swift:116] Initial data loaded successfully
+[2025-12-02 14:12:08.547] [INFO] [VertexAIClient.swift:20] Sandboxed home: /Users/smamdani/Library/Containers/com.smamdani.Viewpoint/Data
+[2025-12-02 14:12:08.548] [INFO] [VertexAIClient.swift:27] Using actual HOME directory: /Users/smamdani
+[2025-12-02 14:12:08.549] [INFO] [VertexAIClient.swift:34] Looking for credentials at: /Users/smamdani/.config/gcloud/application_default_credentials.json
+[2025-12-02 14:12:08.763] [INFO] [VertexAIClient.swift:102] Successfully obtained access token (length: 254)
+[2025-12-02 14:12:08.764] [INFO] [VertexAIClient.swift:259] Building request to: https://aiplatform.googleapis.com/v1/projects/prj-e-smamdani-3za/locations/global/publishers/google/models/gemini-3-pro-preview:streamGenerateContent
+[2025-12-02 14:12:08.764] [INFO] [VertexAIClient.swift:260] Using access token starting with: ya29.a0ATi6K2uRpSouN...
+[2025-12-02 14:12:19.019] [INFO] [VertexAIClient.swift:134] Streaming response status: 200
+[2025-12-02 14:12:19.088] [INFO] [VertexAIClient.swift:147] Received 5349 bytes total
+[2025-12-02 14:12:19.089] [INFO] [VertexAIClient.swift:155] Parsed JSON array with 2 chunks
+[2025-12-02 14:12:19.089] [INFO] [VertexAIClient.swift:163] Chunk 1 keys: responseId, createTime, candidates, usageMetadata, modelVersion
+[2025-12-02 14:12:19.089] [INFO] [VertexAIClient.swift:173] Found 1 candidates
+[2025-12-02 14:12:19.089] [INFO] [VertexAIClient.swift:176] First candidate keys: content
+[2025-12-02 14:12:19.090] [INFO] [VertexAIClient.swift:192] Content keys: role, parts
+[2025-12-02 14:12:19.090] [INFO] [VertexAIClient.swift:194] Found 1 parts
+[2025-12-02 14:12:19.090] [INFO] [VertexAIClient.swift:196] Chunk 1: extracted text (259 chars)
+[2025-12-02 14:12:19.090] [INFO] [VertexAIClient.swift:163] Chunk 2 keys: candidates, responseId, usageMetadata, createTime, modelVersion
+[2025-12-02 14:12:19.090] [INFO] [VertexAIClient.swift:173] Found 1 candidates
+[2025-12-02 14:12:19.090] [INFO] [VertexAIClient.swift:176] First candidate keys: finishReason, content
+[2025-12-02 14:12:19.091] [INFO] [VertexAIClient.swift:180] Finish reason: STOP
+[2025-12-02 14:12:19.091] [INFO] [VertexAIClient.swift:192] Content keys: role, parts
+[2025-12-02 14:12:19.091] [INFO] [VertexAIClient.swift:194] Found 1 parts
+[2025-12-02 14:12:19.091] [INFO] [VertexAIClient.swift:196] Chunk 2: extracted text (66 chars)
+[2025-12-02 14:12:19.115] [INFO] [VertexAIClient.swift:220] Streaming complete. Processed 2 chunks
+[2025-12-02 14:12:19.132] [INFO] [JiraService.swift:1651] Using current sprint: WF-Y25-Q4-S24 (ID: 12116)
+[2025-12-02 14:12:19.132] [INFO] [JiraService.swift:1932] Searching for component matching query: 'Management Tasks'
+[2025-12-02 14:12:19.132] [INFO] [JiraService.swift:1933] Available components: All-SETI, Applications, Management, Management Tasks
+[2025-12-02 14:12:19.132] [INFO] [JiraService.swift:1937] Found exact component match: Management Tasks
+[2025-12-02 14:12:19.132] [INFO] [JiraService.swift:1709] Using default component: Management Tasks
+[2025-12-02 14:12:19.134] [INFO] [JiraService.swift:1722] Creating issue with fields: ["issuetype": ["name": "Story"], "assignee": ["emailAddress": "smamdani@verily.health"], "project": ["key": "SETI"], "customfield_10020": 12116, "components": [["name": "Management Tasks"]], "summary": "Followup with team on N8N"]
+[2025-12-02 14:12:20.616] [INFO] [JiraService.swift:1730] Create issue response status: 201
+[2025-12-02 14:12:20.617] [INFO] [JiraService.swift:1736] Successfully created issue: SETI-846
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+[2025-12-02 14:12:26.867] [INFO] [JiraService.swift:161] JQL: project IN ("Systems Engineering and Technology Integration") AND assignee IN ("Sohail Mamdani") AND type IN ("Story") AND sprint IN (14120) order by created DESC
+[2025-12-02 14:12:26.867] [INFO] [JiraService.swift:162] Fetching up to 100 more issues, pageToken: none
+[2025-12-02 14:12:26.867] [INFO] [JiraService.swift:191] Fetching issues from: https://verily.atlassian.net/rest/api/3/search/jql?jql=project%20IN%20(%22Systems%20Engineering%20and%20Technology%20Integration%22)%20AND%20assignee%20IN%20(%22Sohail%20Mamdani%22)%20AND%20type%20IN%20(%22Story%22)%20AND%20sprint%20IN%20(14120)%20order%20by%20created%20DESC&maxResults=100&fields=summary,status,assignee,issuetype,project,priority,created,updated,components,customfield_10014,customfield_10016,customfield_10020,timeoriginalestimate,timespent,timeestimate
+[2025-12-02 14:12:27.659] [INFO] [JiraService.swift:202] Response status: 200
+[2025-12-02 14:12:27.661] [INFO] [JiraService.swift:222] Fetched 6 issues (loaded so far: 6, hasMore: false)
+[2025-12-02 14:12:27.662] [INFO] [JiraService.swift:226] Successfully fetched 6 total issues
+[2025-12-02 14:12:36.582] [INFO] [JiraService.swift:99] Saved filters: IssueFilters(statuses: Set([]), assignees: Set([]), issueTypes: Set([]), projects: Set(["Systems Engineering and Technology Integration"]), epics: Set([]), sprints: Set([14120]), startDate: nil, endDate: nil, showOnlyMyIssues: false)
+[2025-12-02 14:12:36.582] [INFO] [JiraService.swift:99] Saved filters: IssueFilters(statuses: Set([]), assignees: Set([]), issueTypes: Set([]), projects: Set(["Systems Engineering and Technology Integration"]), epics: Set([]), sprints: Set([14120]), startDate: nil, endDate: nil, showOnlyMyIssues: false)
+[2025-12-02 14:12:36.583] [INFO] [SavedView.swift:101] Applied view: Current SETI Sprint
+[2025-12-02 14:12:36.802] [INFO] [JiraService.swift:161] JQL: project IN ("Systems Engineering and Technology Integration") AND sprint IN (14120) order by created DESC
+[2025-12-02 14:12:36.802] [INFO] [JiraService.swift:162] Fetching up to 100 more issues, pageToken: none
+[2025-12-02 14:12:36.802] [INFO] [JiraService.swift:191] Fetching issues from: https://verily.atlassian.net/rest/api/3/search/jql?jql=project%20IN%20(%22Systems%20Engineering%20and%20Technology%20Integration%22)%20AND%20sprint%20IN%20(14120)%20order%20by%20created%20DESC&maxResults=100&fields=summary,status,assignee,issuetype,project,priority,created,updated,components,customfield_10014,customfield_10016,customfield_10020,timeoriginalestimate,timespent,timeestimate
+[2025-12-02 14:12:37.353] [INFO] [JiraService.swift:202] Response status: 200
+[2025-12-02 14:12:37.362] [INFO] [JiraService.swift:222] Fetched 97 issues (loaded so far: 97, hasMore: false)
+[2025-12-02 14:12:37.363] [INFO] [JiraService.swift:226] Successfully fetched 97 total issues
+[2025-12-02 14:12:41.834] [INFO] [JiraService.swift:99] Saved filters: IssueFilters(statuses: Set([]), assignees: Set(["Sohail Mamdani"]), issueTypes: Set(["Story"]), projects: Set(["Systems Engineering and Technology Integration"]), epics: Set([]), sprints: Set([14120]), startDate: nil, endDate: nil, showOnlyMyIssues: false)
+[2025-12-02 14:12:41.835] [INFO] [JiraService.swift:99] Saved filters: IssueFilters(statuses: Set([]), assignees: Set(["Sohail Mamdani"]), issueTypes: Set(["Story"]), projects: Set(["Systems Engineering and Technology Integration"]), epics: Set([]), sprints: Set([14120]), startDate: nil, endDate: nil, showOnlyMyIssues: false)
+[2025-12-02 14:12:41.835] [INFO] [SavedView.swift:101] Applied view: My Stories This Sprint
+[2025-12-02 14:12:42.221] [INFO] [JiraService.swift:161] JQL: project IN ("Systems Engineering and Technology Integration") AND assignee IN ("Sohail Mamdani") AND type IN ("Story") AND sprint IN (14120) order by created DESC
+[2025-12-02 14:12:42.221] [INFO] [JiraService.swift:162] Fetching up to 100 more issues, pageToken: none
+[2025-12-02 14:12:42.221] [INFO] [JiraService.swift:191] Fetching issues from: https://verily.atlassian.net/rest/api/3/search/jql?jql=project%20IN%20(%22Systems%20Engineering%20and%20Technology%20Integration%22)%20AND%20assignee%20IN%20(%22Sohail%20Mamdani%22)%20AND%20type%20IN%20(%22Story%22)%20AND%20sprint%20IN%20(14120)%20order%20by%20created%20DESC&maxResults=100&fields=summary,status,assignee,issuetype,project,priority,created,updated,components,customfield_10014,customfield_10016,customfield_10020,timeoriginalestimate,timespent,timeestimate
+[2025-12-02 14:12:42.545] [INFO] [JiraService.swift:202] Response status: 200
+[2025-12-02 14:12:42.547] [INFO] [JiraService.swift:222] Fetched 6 issues (loaded so far: 6, hasMore: false)
+[2025-12-02 14:12:42.547] [INFO] [JiraService.swift:226] Successfully fetched 6 total issues
+[2025-12-02 14:12:51.443] [INFO] [JiraService.swift:99] Saved filters: IssueFilters(statuses: Set([]), assignees: Set([]), issueTypes: Set([]), projects: Set([]), epics: Set([]), sprints: Set([]), startDate: nil, endDate: nil, showOnlyMyIssues: false)
+[2025-12-02 14:12:51.703] [INFO] [JiraService.swift:161] JQL: created >= -30d order by created DESC
+[2025-12-02 14:12:51.703] [INFO] [JiraService.swift:162] Fetching up to 100 more issues, pageToken: none
+[2025-12-02 14:12:51.703] [INFO] [JiraService.swift:191] Fetching issues from: https://verily.atlassian.net/rest/api/3/search/jql?jql=created%20%3E%3D%20-30d%20order%20by%20created%20DESC&maxResults=100&fields=summary,status,assignee,issuetype,project,priority,created,updated,components,customfield_10014,customfield_10016,customfield_10020,timeoriginalestimate,timespent,timeestimate
+[2025-12-02 14:12:52.249] [INFO] [JiraService.swift:202] Response status: 200
+[2025-12-02 14:12:52.256] [INFO] [JiraService.swift:222] Fetched 100 issues (loaded so far: 100, hasMore: true)
+[2025-12-02 14:12:52.257] [INFO] [JiraService.swift:226] Successfully fetched 100 total issues
+nw_read_request_report [C6] Receive failed with error "Socket is not connected"
+nw_read_request_report [C6] Receive failed with error "Socket is not connected"
+[2025-12-02 14:13:12.260] [INFO] [JiraService.swift:99] Saved filters: IssueFilters(statuses: Set([]), assignees: Set(["Sohail Mamdani"]), issueTypes: Set(["Story"]), projects: Set(["Systems Engineering and Technology Integration"]), epics: Set([]), sprints: Set([14120]), startDate: nil, endDate: nil, showOnlyMyIssues: false)
+[2025-12-02 14:13:12.262] [INFO] [JiraService.swift:99] Saved filters: IssueFilters(statuses: Set([]), assignees: Set(["Sohail Mamdani"]), issueTypes: Set(["Story"]), projects: Set(["Systems Engineering and Technology Integration"]), epics: Set([]), sprints: Set([14120]), startDate: nil, endDate: nil, showOnlyMyIssues: false)
+[2025-12-02 14:13:12.262] [INFO] [SavedView.swift:101] Applied view: My Stories This Sprint
+[2025-12-02 14:13:12.577] [INFO] [JiraService.swift:161] JQL: project IN ("Systems Engineering and Technology Integration") AND assignee IN ("Sohail Mamdani") AND type IN ("Story") AND sprint IN (14120) order by created DESC
+[2025-12-02 14:13:12.577] [INFO] [JiraService.swift:162] Fetching up to 100 more issues, pageToken: none
+[2025-12-02 14:13:12.577] [INFO] [JiraService.swift:191] Fetching issues from: https://verily.atlassian.net/rest/api/3/search/jql?jql=project%20IN%20(%22Systems%20Engineering%20and%20Technology%20Integration%22)%20AND%20assignee%20IN%20(%22Sohail%20Mamdani%22)%20AND%20type%20IN%20(%22Story%22)%20AND%20sprint%20IN%20(14120)%20order%20by%20created%20DESC&maxResults=100&fields=summary,status,assignee,issuetype,project,priority,created,updated,components,customfield_10014,customfield_10016,customfield_10020,timeoriginalestimate,timespent,timeestimate
+[2025-12-02 14:13:12.956] [INFO] [JiraService.swift:202] Response status: 200
+[2025-12-02 14:13:12.973] [INFO] [JiraService.swift:222] Fetched 6 issues (loaded so far: 6, hasMore: false)
+[2025-12-02 14:13:12.973] [INFO] [JiraService.swift:226] Successfully fetched 6 total issues
+[2025-12-02 14:13:37.845] [INFO] [JiraService.swift:99] Saved filters: IssueFilters(statuses: Set([]), assignees: Set([]), issueTypes: Set([]), projects: Set([]), epics: Set([]), sprints: Set([]), startDate: nil, endDate: nil, showOnlyMyIssues: false)
+[2025-12-02 14:13:38.063] [INFO] [JiraService.swift:161] JQL: created >= -30d order by created DESC
+[2025-12-02 14:13:38.063] [INFO] [JiraService.swift:162] Fetching up to 100 more issues, pageToken: none
+[2025-12-02 14:13:38.063] [INFO] [JiraService.swift:191] Fetching issues from: https://verily.atlassian.net/rest/api/3/search/jql?jql=created%20%3E%3D%20-30d%20order%20by%20created%20DESC&maxResults=100&fields=summary,status,assignee,issuetype,project,priority,created,updated,components,customfield_10014,customfield_10016,customfield_10020,timeoriginalestimate,timespent,timeestimate
+[2025-12-02 14:13:38.658] [INFO] [JiraService.swift:202] Response status: 200
+[2025-12-02 14:13:38.660] [INFO] [JiraService.swift:222] Fetched 100 issues (loaded so far: 100, hasMore: true)
+[2025-12-02 14:13:38.660] [INFO] [JiraService.swift:226] Successfully fetched 100 total issues
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+[2025-12-02 14:13:49.022] [INFO] [JiraService.swift:1457] Fetching full details for SETI-846
+[2025-12-02 14:13:49.508] [INFO] [JiraService.swift:1465] Issue details response status: 200
+[2025-12-02 14:13:49.509] [INFO] [JiraService.swift:1518] Fetching comments for SETI-846
+[2025-12-02 14:13:49.509] [INFO] [JiraService.swift:1371] Fetching changelog for SETI-846
+[2025-12-02 14:13:49.775] [INFO] [JiraService.swift:1552] Successfully fetched 0 comments for SETI-846
+[2025-12-02 14:13:50.274] [INFO] [JiraService.swift:1379] Changelog response status: 200
+[2025-12-02 14:13:50.276] [INFO] [JiraService.swift:1415] Successfully fetched changelog for SETI-846
+[2025-12-02 14:13:50.276] [INFO] [JiraService.swift:1493] Successfully fetched details for SETI-846

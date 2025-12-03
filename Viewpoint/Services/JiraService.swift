@@ -1943,75 +1943,79 @@ class JiraService: ObservableObject {
 
     // MARK: - Semantic Search Helpers
 
-    func findActiveSprintForProject(projectKey: String?) async -> JiraSprint? {
+    func findActiveSprintsForProject(projectKey: String?) async -> [JiraSprint] {
         guard let projectKey = projectKey else {
-            Logger.shared.warning("No project key provided for finding active sprint")
-            return nil
+            Logger.shared.warning("No project key provided for finding active sprints")
+            return []
         }
 
-        // Get all cached sprints
-        let allSprints = await MainActor.run { self.availableSprints }
-
-        // Strategy 1: Use sprint-project map if available
-        let sprintMap = await MainActor.run { self.sprintProjectMap }
-        let activeSprintsForProject = allSprints.filter { sprint in
-            sprint.state.lowercased() == "active" &&
-            (sprintMap[sprint.id]?.contains(projectKey) ?? false)
-        }
-
-        if let activeSprint = activeSprintsForProject.first {
-            Logger.shared.info("Found active sprint for project \(projectKey) via mapping: \(activeSprint.name) (ID: \(activeSprint.id))")
-            return activeSprint
-        }
-
-        // Strategy 2: Fallback to name pattern matching
-        // Many sprint names include the project key (e.g., "SETI Sprint 24", "WF-Y25-Q4-S24")
-        let activeSprintsByName = allSprints.filter { sprint in
-            sprint.state.lowercased() == "active" &&
-            sprint.name.uppercased().contains(projectKey.uppercased())
-        }
-
-        if let activeSprint = activeSprintsByName.first {
-            Logger.shared.info("Found active sprint for project \(projectKey) via name pattern: \(activeSprint.name) (ID: \(activeSprint.id))")
-            return activeSprint
-        }
-
-        // Strategy 3: Query the project's issues to see which sprint they're in
-        // This is a last resort - query for one issue from this project and see what sprint it's in
-        let jql = "project = \(projectKey) AND sprint in openSprints() ORDER BY created DESC"
-        let urlString = "\(config.jiraBaseURL)/rest/api/3/search/jql?jql=\(jql)&maxResults=1&fields=customfield_10020"
-
-        guard let encodedURL = urlString.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-              let url = URL(string: encodedURL) else {
-            Logger.shared.warning("Could not find active sprint for project \(projectKey)")
-            return nil
-        }
+        // Query for all boards belonging to this project
+        let urlString = "\(config.jiraBaseURL)/rest/agile/1.0/board?projectKeyOrId=\(projectKey)"
+        guard let url = URL(string: urlString) else { return [] }
 
         let request = createRequest(url: url)
+        var projectBoardIds: [Int] = []
 
         do {
             let (data, _) = try await URLSession.shared.data(for: request)
 
             if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-               let issues = json["issues"] as? [[String: Any]],
-               let firstIssue = issues.first,
-               let fields = firstIssue["fields"] as? [String: Any],
-               let sprintData = fields["customfield_10020"] as? [[String: Any]],
-               let activeSprint = sprintData.first(where: { ($0["state"] as? String)?.lowercased() == "active" }),
-               let sprintId = activeSprint["id"] as? Int {
+               let boards = json["values"] as? [[String: Any]] {
 
-                // Find this sprint in our cached sprints
-                if let sprint = allSprints.first(where: { $0.id == sprintId }) {
-                    Logger.shared.info("Found active sprint for project \(projectKey) via issue query: \(sprint.name) (ID: \(sprint.id))")
-                    return sprint
+                // Filter to only Scrum boards (Kanban boards don't have sprints)
+                for board in boards {
+                    if let boardId = board["id"] as? Int,
+                       let boardType = board["type"] as? String,
+                       boardType.lowercased() == "scrum" {
+                        projectBoardIds.append(boardId)
+                    }
                 }
+
+                Logger.shared.info("Found \(projectBoardIds.count) Scrum boards for project \(projectKey): \(projectBoardIds)")
             }
         } catch {
-            Logger.shared.error("Failed to query issues for active sprint: \(error)")
+            Logger.shared.error("Failed to fetch boards for project \(projectKey): \(error)")
         }
 
-        Logger.shared.warning("Could not find active sprint for project \(projectKey)")
-        return nil
+        // Get all cached sprints and filter to active ones from this project's boards
+        let allSprints = await MainActor.run { self.availableSprints }
+
+        var activeProjectSprints: [JiraSprint] = []
+
+        // For each sprint, check if it belongs to one of the project's boards
+        for sprint in allSprints where sprint.state.lowercased() == "active" {
+            // Query the sprint to get its originBoardId
+            let sprintURL = "\(config.jiraBaseURL)/rest/agile/1.0/sprint/\(sprint.id)"
+            guard let url = URL(string: sprintURL) else { continue }
+
+            let request = createRequest(url: url)
+
+            do {
+                let (data, _) = try await URLSession.shared.data(for: request)
+
+                if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let originBoardId = json["originBoardId"] as? Int,
+                   projectBoardIds.contains(originBoardId) {
+                    activeProjectSprints.append(sprint)
+                    Logger.shared.info("Sprint \(sprint.name) (ID: \(sprint.id)) belongs to project \(projectKey) via board \(originBoardId)")
+                }
+            } catch {
+                Logger.shared.error("Failed to fetch sprint \(sprint.id) details: \(error)")
+            }
+        }
+
+        if activeProjectSprints.isEmpty {
+            Logger.shared.warning("No active sprints found for project \(projectKey)")
+        } else {
+            Logger.shared.info("Found \(activeProjectSprints.count) active sprint(s) for project \(projectKey): \(activeProjectSprints.map { $0.name }.joined(separator: ", "))")
+        }
+
+        return activeProjectSprints
+    }
+
+    func findActiveSprintForProject(projectKey: String?) async -> JiraSprint? {
+        let sprints = await findActiveSprintsForProject(projectKey: projectKey)
+        return sprints.first
     }
 
     func findSprintByName(_ query: String, projectKey: String? = nil) async -> JiraSprint? {
