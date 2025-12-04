@@ -103,9 +103,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         Logger.shared.info("AppDelegate: Application did finish launching")
-        // Configure app to stay running when all windows are closed
-        // Use .accessory to prevent app from coming to foreground when menu bar is clicked
-        NSApp.setActivationPolicy(.accessory)
+        // Keep app running when all windows are closed - use default .regular policy
+        // so windows stay visible when switching apps
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
