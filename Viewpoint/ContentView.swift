@@ -140,7 +140,12 @@ struct ContentView: View {
             return [("All Issues", sortedIssues)]
         }
 
-        let grouped = Dictionary(grouping: sortedIssues) { issue -> String in
+        // When grouping by Epic, filter out Epic-type issues (epics don't belong to epics)
+        let issuesToGroup = groupOption == .epic
+            ? sortedIssues.filter { $0.issueType != "Epic" }
+            : sortedIssues
+
+        let grouped = Dictionary(grouping: issuesToGroup) { issue -> String in
             switch groupOption {
             case .none:
                 return "All Issues"
