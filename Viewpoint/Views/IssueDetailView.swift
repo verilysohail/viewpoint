@@ -524,6 +524,7 @@ struct IssueEpicSelector: View {
     @State private var searchText: String = ""
     @State private var availableEpics: [String: String] = [:] // epic key -> summary
     @State private var isLoading = false
+    @State private var showingPicker = false
 
     private var currentEpicKey: String? {
         issue.fields.customfield_10014
@@ -556,54 +557,9 @@ struct IssueEpicSelector: View {
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundColor(.primary)
 
-            // Search field OUTSIDE the menu
-            HStack(spacing: 6) {
-                Image(systemName: "magnifyingglass")
-                    .foregroundColor(.secondary)
-                    .font(.system(size: 11))
-                TextField("Search epics...", text: $searchText)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 12))
-                if !searchText.isEmpty {
-                    Button(action: { searchText = "" }) {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(.secondary)
-                            .font(.system(size: 12))
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 5)
-            .background(Color(NSColor.controlBackgroundColor))
-            .cornerRadius(6)
-
-            // Dropdown menu
-            Menu {
-                Button("None") {
-                    updateEpic(to: nil)
-                }
-
-                Divider()
-
-                if isLoading {
-                    HStack {
-                        ProgressView()
-                            .scaleEffect(0.7)
-                        Text("Loading epics...")
-                    }
-                } else if filteredEpics.isEmpty && !searchText.isEmpty {
-                    Text("No epics found")
-                        .foregroundColor(.secondary)
-                        .font(.system(size: 12))
-                } else {
-                    ForEach(filteredEpics, id: \.key) { epic in
-                        Button("\(epic.key): \(epic.summary)") {
-                            updateEpic(to: epic.key)
-                        }
-                    }
-                }
-            } label: {
+            Button(action: {
+                showingPicker.toggle()
+            }) {
                 HStack {
                     Text(currentEpicDisplay)
                         .font(.system(size: 12))
@@ -620,6 +576,94 @@ struct IssueEpicSelector: View {
                 .cornerRadius(6)
             }
             .buttonStyle(.plain)
+            .popover(isPresented: $showingPicker, arrowEdge: .trailing) {
+                VStack(spacing: 0) {
+                    // Search field
+                    HStack(spacing: 6) {
+                        Image(systemName: "magnifyingglass")
+                            .foregroundColor(.secondary)
+                            .font(.system(size: 11))
+                        TextField("Search epics...", text: $searchText)
+                            .textFieldStyle(.plain)
+                            .font(.system(size: 12))
+                        if !searchText.isEmpty {
+                            Button(action: { searchText = "" }) {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundColor(.secondary)
+                                    .font(.system(size: 12))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(8)
+                    .background(Color(NSColor.controlBackgroundColor))
+
+                    Divider()
+
+                    // Epic list
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 0) {
+                            // None option
+                            Button(action: {
+                                updateEpic(to: nil)
+                                showingPicker = false
+                            }) {
+                                Text("None")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.primary)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 6)
+                            }
+                            .buttonStyle(.plain)
+                            .background(currentEpicKey == nil ? Color.accentColor.opacity(0.1) : Color.clear)
+
+                            Divider()
+
+                            if isLoading {
+                                HStack {
+                                    ProgressView()
+                                        .scaleEffect(0.7)
+                                    Text("Loading epics...")
+                                        .font(.system(size: 12))
+                                        .foregroundColor(.secondary)
+                                }
+                                .padding()
+                            } else if filteredEpics.isEmpty {
+                                Text(searchText.isEmpty ? "No epics available" : "No epics found")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.secondary)
+                                    .padding()
+                            } else {
+                                ForEach(filteredEpics, id: \.key) { epic in
+                                    Button(action: {
+                                        updateEpic(to: epic.key)
+                                        showingPicker = false
+                                        searchText = ""
+                                    }) {
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(epic.key)
+                                                .font(.system(size: 10, design: .monospaced))
+                                                .foregroundColor(.secondary)
+                                            Text(epic.summary)
+                                                .font(.system(size: 12))
+                                                .foregroundColor(.primary)
+                                        }
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 6)
+                                    }
+                                    .buttonStyle(.plain)
+                                    .background(currentEpicKey == epic.key ? Color.accentColor.opacity(0.1) : Color.clear)
+
+                                    Divider()
+                                }
+                            }
+                        }
+                    }
+                    .frame(width: 300, height: 250)
+                }
+            }
         }
         .task {
             await loadEpics()
