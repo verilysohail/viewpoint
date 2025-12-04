@@ -88,6 +88,6 @@ class CustomSplitView: NSSplitView {
     }
 
     override var dividerThickness: CGFloat {
-        return 1.0
+        return 6.0
     }
 }
