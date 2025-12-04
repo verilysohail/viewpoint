@@ -144,14 +144,12 @@ class JiraService: ObservableObject {
             // Issues will be fetched when user selects a project or executes JQL
             Logger.shared.info("Loading initial data (projects, sprints, and current user)")
 
-            async let projectsFetch = fetchAvailableProjects()
-            async let sprintsFetch = fetchSprints()
-            async let currentUserFetch = fetchCurrentUser()
-
-            // Wait for filter options to load
-            await projectsFetch
-            await sprintsFetch
-            await currentUserFetch
+            // Run all fetches concurrently
+            await withTaskGroup(of: Void.self) { group in
+                group.addTask { await self.fetchAvailableProjects() }
+                group.addTask { await self.fetchSprints() }
+                group.addTask { await self.fetchCurrentUser() }
+            }
 
             Logger.shared.info("Initial data loaded successfully")
         }
