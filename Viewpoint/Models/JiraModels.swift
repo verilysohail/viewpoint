@@ -296,7 +296,7 @@ struct IssueFilters {
     var sprints: Set<Int> = []
     var startDate: Date?
     var endDate: Date?
-    var showOnlyMyIssues: Bool = true
+    var showOnlyMyIssues: Bool = false
 
     func buildJQL(userEmail: String) -> String {
         var jqlParts: [String] = []
