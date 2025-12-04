@@ -557,15 +557,26 @@ struct IssueEpicSelector: View {
                 .foregroundColor(.primary)
 
             Menu {
-                Button("None") {
-                    updateEpic(to: nil)
+                // Search field at the top
+                HStack {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundColor(.secondary)
+                        .font(.system(size: 11))
+                    TextField("Search epics...", text: $searchText)
+                        .textFieldStyle(.plain)
                 }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Color(NSColor.controlBackgroundColor))
+                .cornerRadius(4)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
 
                 Divider()
 
-                TextField("Search epics...", text: $searchText)
-                    .textFieldStyle(.roundedBorder)
-                    .padding(.horizontal, 8)
+                Button("None") {
+                    updateEpic(to: nil)
+                }
 
                 Divider()
 
@@ -575,6 +586,10 @@ struct IssueEpicSelector: View {
                             .scaleEffect(0.7)
                         Text("Loading epics...")
                     }
+                } else if filteredEpics.isEmpty && !searchText.isEmpty {
+                    Text("No epics found")
+                        .foregroundColor(.secondary)
+                        .font(.system(size: 12))
                 } else {
                     ForEach(filteredEpics, id: \.key) { epic in
                         Button("\(epic.key): \(epic.summary)") {
