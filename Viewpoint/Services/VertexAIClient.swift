@@ -12,7 +12,7 @@ class VertexAIClient {
     }
 
     // Get access token from gcloud credentials file
-    private func getAccessToken() -> String? {
+    private func getAccessToken() async -> String? {
         // Read the Application Default Credentials file directly
         // Get the actual user's home directory (not sandboxed)
         // The sandboxed HOME points to the container, so we need to go up several levels
@@ -54,7 +54,7 @@ class VertexAIClient {
             }
 
             // Exchange refresh token for access token via OAuth2
-            return try exchangeRefreshToken(refreshToken: refreshToken, clientId: clientId, clientSecret: clientSecret)
+            return try await exchangeRefreshToken(refreshToken: refreshToken, clientId: clientId, clientSecret: clientSecret)
 
         } catch {
             Logger.shared.error("Failed to read credentials: \(error)")
@@ -62,7 +62,7 @@ class VertexAIClient {
         }
     }
 
-    private func exchangeRefreshToken(refreshToken: String, clientId: String, clientSecret: String) throws -> String? {
+    private func exchangeRefreshToken(refreshToken: String, clientId: String, clientSecret: String) async throws -> String? {
         let url = URL(string: "https://oauth2.googleapis.com/token")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -78,38 +78,26 @@ class VertexAIClient {
         let bodyString = body.map { "\($0.key)=\($0.value)" }.joined(separator: "&")
         request.httpBody = bodyString.data(using: .utf8)
 
-        let semaphore = DispatchSemaphore(value: 0)
-        var accessToken: String?
-        var requestError: Error?
+        let (data, response) = try await URLSession.shared.data(for: request)
 
-        let task = URLSession.shared.dataTask(with: request) { data, response, error in
-            defer { semaphore.signal() }
-
-            if let error = error {
-                requestError = error
-                Logger.shared.error("Token exchange failed: \(error)")
-                return
-            }
-
-            guard let data = data,
-                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let token = json["access_token"] as? String else {
-                Logger.shared.error("Invalid token response")
-                return
-            }
-
-            accessToken = token
-            Logger.shared.info("Successfully obtained access token (length: \(token.count))")
+        guard let httpResponse = response as? HTTPURLResponse else {
+            Logger.shared.error("Token exchange: invalid response type")
+            return nil
         }
 
-        task.resume()
-        semaphore.wait()
-
-        if let error = requestError {
-            throw error
+        guard httpResponse.statusCode == 200 else {
+            Logger.shared.error("Token exchange failed with status: \(httpResponse.statusCode)")
+            return nil
         }
 
-        return accessToken
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let token = json["access_token"] as? String else {
+            Logger.shared.error("Invalid token response")
+            return nil
+        }
+
+        Logger.shared.info("Successfully obtained access token (length: \(token.count))")
+        return token
     }
 
     // MARK: - Non-Streaming Response (for validation/mapping)
@@ -117,7 +105,7 @@ class VertexAIClient {
     func generateContent(prompt: String) async throws -> String {
         let messages = [ChatMessage(role: .user, content: prompt)]
         let endpoint = buildEndpoint()
-        let request = try buildRequest(endpoint: endpoint, messages: messages)
+        let request = try await buildRequest(endpoint: endpoint, messages: messages)
 
         let (data, response) = try await URLSession.shared.data(for: request)
 
@@ -162,7 +150,7 @@ class VertexAIClient {
         Task {
             do {
                 let endpoint = buildEndpoint()
-                let request = try buildRequest(endpoint: endpoint, messages: messages)
+                let request = try await buildRequest(endpoint: endpoint, messages: messages)
 
                 let (asyncBytes, response) = try await URLSession.shared.bytes(for: request)
 
@@ -286,13 +274,13 @@ class VertexAIClient {
         }
     }
 
-    private func buildRequest(endpoint: String, messages: [ChatMessage]) throws -> URLRequest {
+    private func buildRequest(endpoint: String, messages: [ChatMessage]) async throws -> URLRequest {
         guard let url = URL(string: endpoint) else {
             throw VertexAIError.invalidURL
         }
 
         // Get access token from gcloud
-        guard let accessToken = getAccessToken() else {
+        guard let accessToken = await getAccessToken() else {
             throw VertexAIError.authenticationFailed
         }
 
