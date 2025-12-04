@@ -57,7 +57,7 @@ Beautiful Mac-native detail view with comprehensive issue information!
 - **Proper formatting** - Color-coded dates, times, and status
 
 ### 🤖 Indigo AI Assistant
-Your intelligent Jira copilot with comprehensive natural language control!
+Your intelligent Jira assistant with comprehensive natural language control!
 
 - **Voice transcription** - Speak your commands naturally
 - **Comprehensive operations** - Create, update, delete, transition, comment, log work

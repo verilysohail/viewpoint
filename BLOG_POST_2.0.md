@@ -1,4 +1,4 @@
-# Introducing Viewpoint 2.0: Your AI-Powered Jira Copilot for macOS
+# Introducing Viewpoint 2.0: Your AI-Powered Jira Assistant for macOS
 
 **December 3, 2025** • Build 20251203
 
@@ -16,11 +16,11 @@ That question led to **Indigo** - Viewpoint's AI assistant - and everything chan
 
 ---
 
-## 🤖 Meet Indigo: Your Jira Copilot
+## 🤖 Meet Indigo: Your Intelligent Jira Assistant
 
 Imagine saying "close these three issues as done and add a comment saying 'shipped in v2.0'" and having it just... work. That's Indigo.
 
-**Indigo isn't a chatbot.** It's a copilot that understands your Jira workspace:
+**Indigo isn't a chatbot.** It's an intelligent assistant that understands your Jira workspace:
 
 - "Show me all open bugs in the Mobile project assigned to Sarah"
 - "Log 2 hours to PROJ-123 and mark it as in progress"
