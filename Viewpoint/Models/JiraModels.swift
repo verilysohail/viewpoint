@@ -14,6 +14,11 @@ struct JiraIssue: Codable, Identifiable, Hashable {
     var project: String { fields.project.name }
     var epic: String? { fields.customfield_10014 } // Epic link field
     var priority: String? { fields.priority?.name }
+
+    // Helper to create a copy with updated fields
+    func withFields(_ newFields: IssueFields) -> JiraIssue {
+        JiraIssue(id: id, key: key, fields: newFields)
+    }
     var created: Date? {
         guard let dateString = fields.created else { return nil }
         // Try with fractional seconds first, then without
@@ -71,6 +76,82 @@ struct IssueFields: Codable, Hashable {
     let timeoriginalestimate: Int? // Original Estimate (seconds)
     let timespent: Int? // Time Logged (seconds)
     let timeestimate: Int? // Time Remaining (seconds)
+
+    // Helper to create a copy with updated sprint
+    func withSprint(_ sprint: [SprintField]?) -> IssueFields {
+        IssueFields(
+            summary: summary,
+            status: status,
+            assignee: assignee,
+            issuetype: issuetype,
+            project: project,
+            priority: priority,
+            created: created,
+            updated: updated,
+            components: components,
+            customfield_10014: customfield_10014,
+            customfield_10016: customfield_10016,
+            customfield_10020: sprint,
+            timeoriginalestimate: timeoriginalestimate,
+            timespent: timespent,
+            timeestimate: timeestimate
+        )
+    }
+
+    // Helper to create a copy with updated status
+    func withStatus(_ newStatus: StatusField) -> IssueFields {
+        IssueFields(
+            summary: summary,
+            status: newStatus,
+            assignee: assignee,
+            issuetype: issuetype,
+            project: project,
+            priority: priority,
+            created: created,
+            updated: updated,
+            components: components,
+            customfield_10014: customfield_10014,
+            customfield_10016: customfield_10016,
+            customfield_10020: customfield_10020,
+            timeoriginalestimate: timeoriginalestimate,
+            timespent: timespent,
+            timeestimate: timeestimate
+        )
+    }
+
+    init(
+        summary: String,
+        status: StatusField,
+        assignee: UserField?,
+        issuetype: IssueTypeField,
+        project: ProjectField,
+        priority: PriorityField?,
+        created: String?,
+        updated: String?,
+        components: [ComponentField],
+        customfield_10014: String?,
+        customfield_10016: Double?,
+        customfield_10020: [SprintField]?,
+        timeoriginalestimate: Int?,
+        timespent: Int?,
+        timeestimate: Int?
+    ) {
+        self.summary = summary
+        self.status = status
+        self.assignee = assignee
+        self.issuetype = issuetype
+        self.project = project
+        self.priority = priority
+        self.created = created
+        self.updated = updated
+        self.components = components
+        self.customfield_10014 = customfield_10014
+        self.customfield_10016 = customfield_10016
+        self.customfield_10020 = customfield_10020
+        self.timeoriginalestimate = timeoriginalestimate
+        self.timespent = timespent
+        self.timeestimate = timeestimate
+    }
 
     // Coding keys to handle optional fields
     enum CodingKeys: String, CodingKey {

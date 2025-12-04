@@ -194,7 +194,7 @@ class JiraService: ObservableObject {
         let maxResults = 100
         let isInitialFetch = await MainActor.run { currentPageToken == nil && issues.isEmpty }
         var allIssues: [JiraIssue] = await MainActor.run { issues }
-        var pageToken = await MainActor.run { currentPageToken }
+        let pageToken = await MainActor.run { currentPageToken }
         let fetchLimit = isInitialFetch ? initialFetchLimit : 500 // Initial fetch or subsequent "Load more"
 
         do {
@@ -939,9 +939,9 @@ class JiraService: ObservableObject {
                         // Optimistically update local issues array
                         await MainActor.run {
                             if let index = issues.firstIndex(where: { $0.key == issueKey }) {
-                                var updatedIssue = issues[index]
-                                updatedIssue.status = targetStatus
-                                issues[index] = updatedIssue
+                                let newStatusField = StatusField(name: targetStatus, statusCategory: nil)
+                                let updatedFields = issues[index].fields.withStatus(newStatusField)
+                                issues[index] = issues[index].withFields(updatedFields)
                                 Logger.shared.info("Optimistically updated \(issueKey) status to '\(targetStatus)' in local cache")
                             }
                         }
@@ -1102,7 +1102,6 @@ class JiraService: ObservableObject {
 
     func fetchJQLAutocompleteSuggestions(fieldName: String, query: String = "") async -> [String] {
         // Use Jira's autocomplete API to get all available values for a field
-        let encodedField = fieldName.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? fieldName
         let encodedQuery = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? query
 
         // Map common field names to their Jira autocomplete equivalents
@@ -1202,9 +1201,9 @@ class JiraService: ObservableObject {
                         if let index = issues.firstIndex(where: { $0.key == issueKey }) {
                             // Find sprint details from availableSprints
                             if let sprint = availableSprints.first(where: { $0.id == sprintId }) {
-                                var updatedIssue = issues[index]
-                                updatedIssue.fields.customfield_10020 = [sprint]
-                                issues[index] = updatedIssue
+                                let sprintField = SprintField(id: sprint.id, name: sprint.name, state: sprint.state)
+                                let updatedFields = issues[index].fields.withSprint([sprintField])
+                                issues[index] = issues[index].withFields(updatedFields)
                                 Logger.shared.info("Optimistically updated \(issueKey) sprint in local cache")
                             }
                         }
@@ -1259,9 +1258,8 @@ class JiraService: ObservableObject {
                     // Optimistically update local issues array
                     await MainActor.run {
                         if let index = issues.firstIndex(where: { $0.key == issueKey }) {
-                            var updatedIssue = issues[index]
-                            updatedIssue.fields.customfield_10020 = nil
-                            issues[index] = updatedIssue
+                            let updatedFields = issues[index].fields.withSprint(nil)
+                            issues[index] = issues[index].withFields(updatedFields)
                             Logger.shared.info("Optimistically updated \(issueKey) to backlog in local cache")
                         }
                     }
@@ -1678,7 +1676,7 @@ class JiraService: ObservableObject {
                         if let items = change["items"] as? [[String: Any]] {
                             for item in items {
                                 let field = item["field"] as? String ?? "Unknown"
-                                let fieldType = item["fieldtype"] as? String
+                                let _ = item["fieldtype"] as? String // Available if needed later
                                 let from = item["fromString"] as? String ?? "(none)"
                                 let to = item["toString"] as? String ?? "(none)"
 
