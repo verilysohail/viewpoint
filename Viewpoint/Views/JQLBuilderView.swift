@@ -198,7 +198,30 @@ struct JQLBuilderView: View {
 
         // Fetch from Jira API for better autocomplete
         switch field.name.lowercased() {
-        case "assignee", "project", "status", "type", "issuetype", "component", "components", "priority":
+        case "project":
+            // For projects, use local cache with name-to-key mapping
+            let projectData = await MainActor.run {
+                Array(jiraService.availableProjects).compactMap { projectName -> (name: String, key: String)? in
+                    guard let projectKey = jiraService.projectNameToKey[projectName] else { return nil }
+                    return (name: projectName, key: projectKey)
+                }
+            }
+
+            newSuggestions += projectData
+                .filter { currentInput.isEmpty ||
+                         $0.name.lowercased().contains(currentInput) ||
+                         $0.key.lowercased().contains(currentInput) }
+                .sorted { $0.key < $1.key }
+                .map { project in
+                    JQLSuggestion(
+                        text: project.key,  // Insert the key (no quotes needed for keys)
+                        displayText: "\(project.name) (\(project.key))",  // Show both name and key
+                        type: .value,
+                        description: nil
+                    )
+                }
+
+        case "assignee", "status", "type", "issuetype", "component", "components", "priority":
             let apiSuggestions = await jiraService.fetchJQLAutocompleteSuggestions(
                 fieldName: field.name,
                 query: currentInput
@@ -217,7 +240,25 @@ struct JQLBuilderView: View {
                 }
 
         case "sprint":
-            // Still use cached sprints for sprint field
+            // Add sprint functions first
+            let sprintFunctions = [
+                ("openSprints()", "Active/current sprints"),
+                ("futureSprints()", "Future sprints"),
+                ("closedSprints()", "Completed sprints")
+            ]
+
+            for (functionName, description) in sprintFunctions {
+                if currentInput.isEmpty || functionName.lowercased().contains(currentInput) {
+                    newSuggestions.append(JQLSuggestion(
+                        text: functionName,
+                        displayText: functionName,
+                        type: .value,
+                        description: description
+                    ))
+                }
+            }
+
+            // Then add cached sprints for sprint field
             newSuggestions += jiraService.availableSprints
                 .filter { sprint in
                     currentInput.isEmpty ||
@@ -409,13 +450,21 @@ struct JQLBuilderView: View {
         // Add values from available data
         switch field.name.lowercased() {
         case "project":
-            suggestions += jiraService.availableProjects
-                .filter { currentInput.isEmpty || $0.lowercased().contains(currentInput) }
-                .sorted()
+            // Use project keys from name-to-key mapping
+            let projectData = Array(jiraService.availableProjects).compactMap { projectName -> (name: String, key: String)? in
+                guard let projectKey = jiraService.projectNameToKey[projectName] else { return nil }
+                return (name: projectName, key: projectKey)
+            }
+
+            suggestions += projectData
+                .filter { currentInput.isEmpty ||
+                         $0.name.lowercased().contains(currentInput) ||
+                         $0.key.lowercased().contains(currentInput) }
+                .sorted { $0.key < $1.key }
                 .map { project in
                     JQLSuggestion(
-                        text: "\"\(project)\"",
-                        displayText: project,
+                        text: project.key,  // Insert the key (no quotes needed for keys)
+                        displayText: "\(project.name) (\(project.key))",  // Show both name and key
                         type: .value,
                         description: nil
                     )
@@ -486,6 +535,25 @@ struct JQLBuilderView: View {
                 }
 
         case "sprint":
+            // Add sprint functions first
+            let sprintFunctions = [
+                ("openSprints()", "Active/current sprints"),
+                ("futureSprints()", "Future sprints"),
+                ("closedSprints()", "Completed sprints")
+            ]
+
+            for (functionName, description) in sprintFunctions {
+                if currentInput.isEmpty || functionName.lowercased().contains(currentInput) {
+                    suggestions.append(JQLSuggestion(
+                        text: functionName,
+                        displayText: functionName,
+                        type: .value,
+                        description: description
+                    ))
+                }
+            }
+
+            // Then add cached sprints
             suggestions += jiraService.availableSprints
                 .filter { sprint in
                     currentInput.isEmpty ||

@@ -31,6 +31,9 @@ class JiraService: ObservableObject {
     // Epic summaries (epic key -> summary)
     @Published var epicSummaries: [String: String] = [:]
 
+    // Project name to key mapping (project name -> project key)
+    @Published var projectNameToKey: [String: String] = [:]
+
     // Sprint to project associations (sprint ID -> set of project keys)
     var sprintProjectMap: [Int: Set<String>] = [:]
 
@@ -592,11 +595,20 @@ class JiraService: ObservableObject {
             // Parse projects
             if let projects = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
                 let projectNames = projects.compactMap { $0["name"] as? String }
+                var nameToKey: [String: String] = [:]
+
+                for project in projects {
+                    if let name = project["name"] as? String,
+                       let key = project["key"] as? String {
+                        nameToKey[name] = key
+                    }
+                }
 
                 Logger.shared.info("Found \(projectNames.count) accessible projects")
 
                 await MainActor.run {
                     self.availableProjects = Set(projectNames)
+                    self.projectNameToKey = nameToKey
                 }
             }
         } catch {
@@ -1141,12 +1153,12 @@ class JiraService: ObservableObject {
                let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                let results = json["results"] as? [[String: Any]] {
 
-                // Extract display names from results
+                // Extract display names from results and strip HTML tags
                 let suggestions = results.compactMap { result -> String? in
                     if let displayName = result["displayName"] as? String {
-                        return displayName
+                        return stripHTMLTags(from: displayName)
                     } else if let value = result["value"] as? String {
-                        return value
+                        return stripHTMLTags(from: value)
                     }
                     return nil
                 }
@@ -1674,7 +1686,6 @@ class JiraService: ObservableObject {
                         if let items = change["items"] as? [[String: Any]] {
                             for item in items {
                                 let field = item["field"] as? String ?? "Unknown"
-                                let _ = item["fieldtype"] as? String // Available if needed later
                                 let from = item["fromString"] as? String ?? "(none)"
                                 let to = item["toString"] as? String ?? "(none)"
 
@@ -2463,5 +2474,34 @@ class JiraService: ObservableObject {
 
         Logger.shared.warning("No component match found for query: '\(query)'")
         return nil
+    }
+
+    // MARK: - Helper Functions
+
+    private func stripHTMLTags(from string: String) -> String {
+        // Remove HTML tags like <b>, </b>, <em>, </em>, etc.
+        var result = string
+        let pattern = "<[^>]+>"
+        if let regex = try? NSRegularExpression(pattern: pattern, options: []) {
+            result = regex.stringByReplacingMatches(
+                in: result,
+                options: [],
+                range: NSRange(location: 0, length: result.utf16.count),
+                withTemplate: ""
+            )
+        }
+
+        // Clean up multiple spaces left after tag removal
+        let spacePattern = " +"
+        if let spaceRegex = try? NSRegularExpression(pattern: spacePattern, options: []) {
+            result = spaceRegex.stringByReplacingMatches(
+                in: result,
+                options: [],
+                range: NSRange(location: 0, length: result.utf16.count),
+                withTemplate: " "
+            )
+        }
+
+        return result.trimmingCharacters(in: .whitespaces)
     }
 }

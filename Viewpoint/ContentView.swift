@@ -230,7 +230,7 @@ struct ContentView: View {
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
-                    IssueListView(selectedIssues: $jiraService.selectedIssues, groupedIssues: groupedIssues, expandedSections: expandedSections)
+                    IssueListView(selectedIssues: $jiraService.selectedIssues, groupedIssues: groupedIssues, expandedSections: expandedSections, groupOption: groupOption)
                 }
             }
         }
@@ -466,6 +466,10 @@ struct IssueListView: View {
     @Binding var selectedIssues: Set<JiraIssue.ID>
     let groupedIssues: [(String, [JiraIssue])]
     @Binding var expandedSections: Set<String>
+    let groupOption: GroupOption
+    @EnvironmentObject var jiraService: JiraService
+    @State private var draggedIssueKeys: Set<String> = []
+    @State private var dropTargetGroup: String? = nil
 
     var body: some View {
         List(selection: $selectedIssues) {
@@ -486,6 +490,9 @@ struct IssueListView: View {
                         ForEach(issues) { issue in
                             IssueRow(issue: issue)
                                 .tag(issue)
+                                .onDrag {
+                                    startDrag(issue: issue)
+                                }
                         }
                     } label: {
                         HStack {
@@ -494,16 +501,32 @@ struct IssueListView: View {
                                 .textCase(.uppercase)
                                 .foregroundColor(Color(red: 0.0, green: 0.4, blue: 0.2))
                             Spacer()
+                            if !draggedIssueKeys.isEmpty {
+                                Text("\(draggedIssueKeys.count) issue\(draggedIssueKeys.count == 1 ? "" : "s")")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
                         }
                         .padding(.vertical, 6)
                         .padding(.horizontal, 8)
-                        .background(Color(NSColor.controlBackgroundColor))
+                        .background(dropTargetGroup == groupName ? Color.accentColor.opacity(0.2) : Color(NSColor.controlBackgroundColor))
                         .cornerRadius(4)
+                        .onDrop(of: [.text], isTargeted: Binding(
+                            get: { dropTargetGroup == groupName },
+                            set: { isTargeted in
+                                dropTargetGroup = isTargeted ? groupName : nil
+                            }
+                        )) { providers in
+                            handleDrop(providers: providers, targetGroup: groupName)
+                        }
                     }
                 } else {
                     ForEach(issues) { issue in
                         IssueRow(issue: issue)
                             .tag(issue)
+                            .onDrag {
+                                startDrag(issue: issue)
+                            }
                     }
                 }
             }
@@ -515,6 +538,130 @@ struct IssueListView: View {
                 expandedSections = Set(groupedIssues.map { $0.0 })
             }
         }
+    }
+
+    private func startDrag(issue: JiraIssue) -> NSItemProvider {
+        // Determine which issues to drag
+        var issuesToDrag: [JiraIssue]
+
+        if selectedIssues.contains(issue.id) {
+            // If the dragged issue is selected, drag all selected issues
+            issuesToDrag = jiraService.issues.filter { selectedIssues.contains($0.id) }
+        } else {
+            // Otherwise, just drag this one issue
+            issuesToDrag = [issue]
+        }
+
+        // Store the dragged issue keys for UI feedback
+        draggedIssueKeys = Set(issuesToDrag.map { $0.key })
+
+        // Create JSON payload with issue keys
+        let issueKeys = issuesToDrag.map { $0.key }
+        guard let jsonData = try? JSONEncoder().encode(issueKeys),
+              let jsonString = String(data: jsonData, encoding: .utf8) else {
+            return NSItemProvider()
+        }
+
+        let provider = NSItemProvider(object: jsonString as NSString)
+        return provider
+    }
+
+    private func handleDrop(providers: [NSItemProvider], targetGroup: String) -> Bool {
+        guard let provider = providers.first else { return false }
+
+        // Extract the JSON string from the provider
+        provider.loadItem(forTypeIdentifier: "public.text", options: nil) { data, error in
+            guard error == nil,
+                  let stringData = data as? Data,
+                  let jsonString = String(data: stringData, encoding: .utf8),
+                  let issueKeys = try? JSONDecoder().decode([String].self, from: Data(jsonString.utf8)) else {
+                return
+            }
+
+            // Perform the bulk update on the main thread
+            Task { @MainActor in
+                await performBulkUpdate(issueKeys: issueKeys, targetGroup: targetGroup)
+                draggedIssueKeys.removeAll()
+            }
+        }
+
+        return true
+    }
+
+    private func performBulkUpdate(issueKeys: [String], targetGroup: String) async {
+        switch groupOption {
+        case .none:
+            // No grouping, no bulk update
+            break
+
+        case .assignee:
+            // targetGroup is the assignee display name
+            await bulkUpdateAssignee(issueKeys: issueKeys, assignee: targetGroup)
+
+        case .status:
+            // targetGroup is the status name
+            await bulkUpdateStatus(issueKeys: issueKeys, status: targetGroup)
+
+        case .epic:
+            // targetGroup is either "No Epic" or "EPIC-KEY: Epic Summary"
+            await bulkUpdateEpic(issueKeys: issueKeys, epicGroup: targetGroup)
+
+        case .initiative:
+            // targetGroup is the project name (initiative placeholder)
+            await bulkUpdateInitiative(issueKeys: issueKeys, initiative: targetGroup)
+        }
+    }
+
+    private func bulkUpdateAssignee(issueKeys: [String], assignee: String) async {
+        let assigneeEmail: String?
+
+        if assignee == "Unassigned" {
+            assigneeEmail = nil
+        } else {
+            // Try to find the email from loaded issues
+            assigneeEmail = jiraService.issues.first { $0.assignee == assignee }?.fields.assignee?.emailAddress
+        }
+
+        for issueKey in issueKeys {
+            if let email = assigneeEmail {
+                _ = await jiraService.assignIssue(issueKey: issueKey, assigneeEmail: email)
+            }
+        }
+    }
+
+    private func bulkUpdateStatus(issueKeys: [String], status: String) async {
+        for issueKey in issueKeys {
+            _ = await jiraService.updateIssueStatus(issueKey: issueKey, newStatus: status)
+        }
+    }
+
+    private func bulkUpdateEpic(issueKeys: [String], epicGroup: String) async {
+        var epicKey: String?
+
+        if epicGroup == "No Epic" {
+            epicKey = nil
+        } else {
+            // Extract epic key from "EPIC-KEY: Epic Summary" format
+            if let colonIndex = epicGroup.firstIndex(of: ":") {
+                epicKey = String(epicGroup[..<colonIndex])
+            } else {
+                epicKey = epicGroup
+            }
+        }
+
+        for issueKey in issueKeys {
+            if let epic = epicKey {
+                _ = await jiraService.updateIssue(issueKey: issueKey, fields: ["epic": epic])
+            } else {
+                _ = await jiraService.updateIssue(issueKey: issueKey, fields: ["customfield_10014": NSNull()])
+            }
+        }
+    }
+
+    private func bulkUpdateInitiative(issueKeys: [String], initiative: String) async {
+        // Initiative is mapped to project - this would require moving issues between projects
+        // which is a complex operation in Jira. For now, we'll log a warning.
+        Logger.shared.warning("Bulk initiative (project) changes not yet supported")
     }
 }
 

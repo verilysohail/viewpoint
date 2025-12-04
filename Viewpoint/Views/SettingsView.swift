@@ -13,6 +13,11 @@ struct SettingsView: View {
                     Label("AI", systemImage: "sparkles")
                 }
 
+            DefaultsSettingsTab()
+                .tabItem {
+                    Label("Defaults", systemImage: "slider.horizontal.3")
+                }
+
             PerformanceSettingsTab()
                 .tabItem {
                     Label("Performance", systemImage: "gauge")
@@ -319,6 +324,284 @@ struct AISettingsTab: View {
            let model = AIModel.allCases.first(where: { $0.rawValue == savedModel }) {
             selectedModel = model
         }
+    }
+}
+
+// MARK: - Defaults Settings Tab
+
+struct DefaultsSettingsTab: View {
+    @AppStorage("defaultAssignee") private var defaultAssignee: String = ""
+    @AppStorage("defaultProject") private var defaultProject: String = ""
+    @AppStorage("defaultComponent") private var defaultComponent: String = ""
+    @AppStorage("defaultEpic") private var defaultEpic: String = ""
+
+    @State private var validationStatus: ValidationStatus = .notChecked
+    @State private var validationMessage: String = ""
+    @State private var isValidating: Bool = false
+
+    enum ValidationStatus {
+        case notChecked
+        case checking
+        case valid
+        case invalid
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            Text("Create Issue Defaults")
+                .font(.headline)
+
+            VStack(spacing: 16) {
+                HStack(spacing: 20) {
+                    Text("Assignee")
+                        .frame(width: 100, alignment: .trailing)
+                    TextField("john@example.com", text: $defaultAssignee)
+                        .textFieldStyle(.roundedBorder)
+                }
+
+                HStack(spacing: 20) {
+                    Text("Project")
+                        .frame(width: 100, alignment: .trailing)
+                    TextField("SETI", text: $defaultProject)
+                        .textFieldStyle(.roundedBorder)
+                }
+
+                HStack(spacing: 20) {
+                    Text("Component")
+                        .frame(width: 100, alignment: .trailing)
+                    TextField("Management Tasks", text: $defaultComponent)
+                        .textFieldStyle(.roundedBorder)
+                }
+
+                HStack(spacing: 20) {
+                    Text("Epic")
+                        .frame(width: 100, alignment: .trailing)
+                    TextField("Epic Name or ID", text: $defaultEpic)
+                        .textFieldStyle(.roundedBorder)
+                }
+            }
+            .padding(20)
+            .background(Color(NSColor.controlBackgroundColor))
+            .cornerRadius(8)
+
+            Text("Set default values for creating new issues. Leave blank for no default.")
+                .font(.caption)
+                .foregroundColor(.secondary)
+
+            if validationStatus == .checking {
+                HStack {
+                    ProgressView()
+                        .scaleEffect(0.8)
+                    Text("Checking values...")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            if validationStatus == .valid {
+                HStack {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(.green)
+                    Text(validationMessage)
+                        .font(.caption)
+                        .foregroundColor(.green)
+                }
+            }
+
+            if validationStatus == .invalid {
+                HStack {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundColor(.red)
+                    Text(validationMessage)
+                        .font(.caption)
+                        .foregroundColor(.red)
+                }
+            }
+
+            HStack {
+                Spacer()
+                Button("Check Values") {
+                    Task {
+                        await validateDefaults()
+                    }
+                }
+                .disabled(isValidating || allFieldsEmpty)
+            }
+        }
+        .padding(20)
+    }
+
+    private var allFieldsEmpty: Bool {
+        defaultAssignee.isEmpty &&
+        defaultProject.isEmpty &&
+        defaultComponent.isEmpty &&
+        defaultEpic.isEmpty
+    }
+
+    private func validateDefaults() async {
+        validationStatus = .checking
+        isValidating = true
+        validationMessage = ""
+
+        var errors: [String] = []
+
+        // Validate each non-empty field
+        if !defaultAssignee.isEmpty {
+            let valid = await validateAssignee(defaultAssignee)
+            if !valid {
+                errors.append("Assignee '\(defaultAssignee)' not found")
+            }
+        }
+
+        if !defaultProject.isEmpty {
+            let valid = await validateProject(defaultProject)
+            if !valid {
+                errors.append("Project '\(defaultProject)' not found")
+            }
+        }
+
+        if !defaultComponent.isEmpty && !defaultProject.isEmpty {
+            let valid = await validateComponent(defaultComponent, inProject: defaultProject)
+            if !valid {
+                errors.append("Component '\(defaultComponent)' not found in project")
+            }
+        } else if !defaultComponent.isEmpty && defaultProject.isEmpty {
+            errors.append("Component requires a project to be set")
+        }
+
+        if !defaultEpic.isEmpty {
+            let valid = await validateEpic(defaultEpic)
+            if !valid {
+                errors.append("Epic '\(defaultEpic)' not found")
+            }
+        }
+
+        await MainActor.run {
+            isValidating = false
+            if errors.isEmpty {
+                validationStatus = .valid
+                validationMessage = "All values are valid!"
+            } else {
+                validationStatus = .invalid
+                validationMessage = errors.joined(separator: "\n")
+            }
+        }
+    }
+
+    private func validateAssignee(_ assignee: String) async -> Bool {
+        // Use Jira's user search API
+        let config = Configuration.shared
+        let encodedQuery = assignee.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? assignee
+        let urlString = "\(config.jiraBaseURL)/rest/api/3/user/search?query=\(encodedQuery)"
+
+        guard let url = URL(string: urlString) else { return false }
+
+        var request = URLRequest(url: url)
+        let credentials = "\(config.jiraEmail):\(config.jiraAPIKey)"
+        let credentialData = credentials.data(using: .utf8)!
+        let base64Credentials = credentialData.base64EncodedString()
+        request.setValue("Basic \(base64Credentials)", forHTTPHeaderField: "Authorization")
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+                return false
+            }
+
+            if let users = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
+                return !users.isEmpty
+            }
+        } catch {
+            return false
+        }
+
+        return false
+    }
+
+    private func validateProject(_ projectKey: String) async -> Bool {
+        // Use Jira's project API
+        let config = Configuration.shared
+        let urlString = "\(config.jiraBaseURL)/rest/api/3/project/\(projectKey)"
+
+        guard let url = URL(string: urlString) else { return false }
+
+        var request = URLRequest(url: url)
+        let credentials = "\(config.jiraEmail):\(config.jiraAPIKey)"
+        let credentialData = credentials.data(using: .utf8)!
+        let base64Credentials = credentialData.base64EncodedString()
+        request.setValue("Basic \(base64Credentials)", forHTTPHeaderField: "Authorization")
+
+        do {
+            let (_, response) = try await URLSession.shared.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse else { return false }
+            return httpResponse.statusCode == 200
+        } catch {
+            return false
+        }
+    }
+
+    private func validateComponent(_ componentName: String, inProject projectKey: String) async -> Bool {
+        // Use Jira's project components API
+        let config = Configuration.shared
+        let urlString = "\(config.jiraBaseURL)/rest/api/3/project/\(projectKey)/components"
+
+        guard let url = URL(string: urlString) else { return false }
+
+        var request = URLRequest(url: url)
+        let credentials = "\(config.jiraEmail):\(config.jiraAPIKey)"
+        let credentialData = credentials.data(using: .utf8)!
+        let base64Credentials = credentialData.base64EncodedString()
+        request.setValue("Basic \(base64Credentials)", forHTTPHeaderField: "Authorization")
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+                return false
+            }
+
+            if let components = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
+                return components.contains { component in
+                    guard let name = component["name"] as? String else { return false }
+                    return name.lowercased() == componentName.lowercased()
+                }
+            }
+        } catch {
+            return false
+        }
+
+        return false
+    }
+
+    private func validateEpic(_ epic: String) async -> Bool {
+        // Use Jira's issue search to validate epic
+        let config = Configuration.shared
+        let jql = "key = \"\(epic)\" OR summary ~ \"\(epic)\""
+        let encodedJQL = jql.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? jql
+        let urlString = "\(config.jiraBaseURL)/rest/api/3/search?jql=\(encodedJQL)&maxResults=1"
+
+        guard let url = URL(string: urlString) else { return false }
+
+        var request = URLRequest(url: url)
+        let credentials = "\(config.jiraEmail):\(config.jiraAPIKey)"
+        let credentialData = credentials.data(using: .utf8)!
+        let base64Credentials = credentialData.base64EncodedString()
+        request.setValue("Basic \(base64Credentials)", forHTTPHeaderField: "Authorization")
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+                return false
+            }
+
+            if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let total = json["total"] as? Int {
+                return total > 0
+            }
+        } catch {
+            return false
+        }
+
+        return false
     }
 }
 
