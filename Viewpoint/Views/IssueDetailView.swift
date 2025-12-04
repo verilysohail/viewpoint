@@ -36,6 +36,7 @@ struct IssueDetailWindowWrapper: View {
             } else if let issueDetails = issueDetails {
                 IssueDetailView(issueDetails: issueDetails)
                     .environmentObject(jiraService)
+                    .environment(\.refreshIssueDetails, refreshIssueDetails)
             }
         }
         .task {
@@ -56,6 +57,12 @@ struct IssueDetailWindowWrapper: View {
         }
 
         isLoading = false
+    }
+
+    private func refreshIssueDetails() {
+        Task {
+            await loadIssueDetails()
+        }
     }
 }
 
@@ -417,6 +424,7 @@ struct CommentView: View {
 struct IssueSprintSelector: View {
     let issue: JiraIssue
     @EnvironmentObject var jiraService: JiraService
+    @Environment(\.refreshIssueDetails) var refreshIssueDetails
     @State private var selectedSprintName: String = ""
     @State private var isEditing: Bool = false
     @State private var searchText: String = ""
@@ -509,6 +517,9 @@ struct IssueSprintSelector: View {
 
             if success {
                 Logger.shared.info("Updated sprint for \(issue.key) to \(sprint?.name ?? "Backlog")")
+                await MainActor.run {
+                    refreshIssueDetails()
+                }
             } else {
                 Logger.shared.error("Failed to update sprint for \(issue.key)")
             }
@@ -521,6 +532,7 @@ struct IssueSprintSelector: View {
 struct IssueEpicSelector: View {
     let issue: JiraIssue
     @EnvironmentObject var jiraService: JiraService
+    @Environment(\.refreshIssueDetails) var refreshIssueDetails
     @State private var searchText: String = ""
     @State private var availableEpics: [String: String] = [:] // epic key -> summary
     @State private var isLoading = false
@@ -735,6 +747,9 @@ struct IssueEpicSelector: View {
 
             if success {
                 Logger.shared.info("Updated epic for \(issue.key) to \(epicKey ?? "None")")
+                await MainActor.run {
+                    refreshIssueDetails()
+                }
             } else {
                 Logger.shared.error("Failed to update epic for \(issue.key)")
             }
@@ -747,6 +762,7 @@ struct IssueEpicSelector: View {
 struct IssueEstimateEditor: View {
     let issue: JiraIssue
     @EnvironmentObject var jiraService: JiraService
+    @Environment(\.refreshIssueDetails) var refreshIssueDetails
     @State private var isEditing = false
     @State private var editValue: String = ""
 
@@ -843,6 +859,7 @@ struct IssueEstimateEditor: View {
                 if success {
                     Logger.shared.info("Updated estimate for \(issue.key) to \(editValue)")
                     isEditing = false
+                    refreshIssueDetails()
                 } else {
                     Logger.shared.error("Failed to update estimate for \(issue.key)")
                 }
@@ -888,5 +905,18 @@ struct IssueLogTimeButton: View {
                     .environmentObject(jiraService)
             }
         }
+    }
+}
+
+// MARK: - Environment Key for Refresh
+
+struct RefreshIssueDetailsKey: EnvironmentKey {
+    static let defaultValue: () -> Void = {}
+}
+
+extension EnvironmentValues {
+    var refreshIssueDetails: () -> Void {
+        get { self[RefreshIssueDetailsKey.self] }
+        set { self[RefreshIssueDetailsKey.self] = newValue }
     }
 }

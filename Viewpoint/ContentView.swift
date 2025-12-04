@@ -1139,6 +1139,7 @@ struct LogWorkView: View {
     let issue: JiraIssue
     @Binding var isPresented: Bool
     @EnvironmentObject var jiraService: JiraService
+    @Environment(\.refreshIssueDetails) var refreshIssueDetails
 
     @State private var timeInput: String = ""
     @State private var errorMessage: String?
@@ -1214,6 +1215,7 @@ struct LogWorkView: View {
             await MainActor.run {
                 isLogging = false
                 if success {
+                    refreshIssueDetails()
                     isPresented = false
                 } else {
                     errorMessage = "Failed to log work. Please try again."
