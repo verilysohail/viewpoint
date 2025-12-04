@@ -766,7 +766,10 @@ class JiraService: ObservableObject {
         availableStatuses = Set(issues.map { $0.status })
         availableAssignees = Set(issues.compactMap { $0.assignee })
         availableIssueTypes = Set(issues.map { $0.issueType })
-        availableEpics = Set(issues.compactMap { $0.epic })
+
+        // Merge epics from issues with previously seen epics (don't replace)
+        let epicsFromIssues = Set(issues.compactMap { $0.epic })
+        availableEpics = availableEpics.union(epicsFromIssues)
 
         // Merge projects from issues with independently fetched projects
         let projectsFromIssues = Set(issues.map { $0.project })
