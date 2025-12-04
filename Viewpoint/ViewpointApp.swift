@@ -79,12 +79,13 @@ struct ViewpointApp: App {
     }
 
     private func updateMenuBarIcon() {
-        if let delegate = NSApp.delegate as? AppDelegate {
-            if showMenuBarIcon {
-                delegate.showMenuBar()
-            } else {
-                delegate.hideMenuBar()
-            }
+        Logger.shared.info("ViewpointApp: updateMenuBarIcon() called, showMenuBarIcon = \(showMenuBarIcon)")
+        if showMenuBarIcon {
+            Logger.shared.info("ViewpointApp: Calling showMenuBar()")
+            appDelegate.showMenuBar()
+        } else {
+            Logger.shared.info("ViewpointApp: Calling hideMenuBar()")
+            appDelegate.hideMenuBar()
         }
     }
 }
@@ -95,24 +96,31 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var menuBarManager: MenuBarManager?
 
     func configure(with jiraService: JiraService) {
+        Logger.shared.info("AppDelegate: Configuring with JiraService")
         menuBarManager = MenuBarManager(jiraService: jiraService)
+        Logger.shared.info("AppDelegate: MenuBarManager created")
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        Logger.shared.info("AppDelegate: Application did finish launching")
         // Configure app to stay running when all windows are closed
-        NSApp.setActivationPolicy(.regular)
+        // Use .accessory to prevent app from coming to foreground when menu bar is clicked
+        NSApp.setActivationPolicy(.accessory)
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        Logger.shared.info("AppDelegate: Last window closed, keeping app running")
         // Keep app running in background
         return false
     }
 
     func showMenuBar() {
+        Logger.shared.info("AppDelegate: showMenuBar() called")
         menuBarManager?.setupMenuBar()
     }
 
     func hideMenuBar() {
+        Logger.shared.info("AppDelegate: hideMenuBar() called")
         menuBarManager?.removeMenuBar()
     }
 }

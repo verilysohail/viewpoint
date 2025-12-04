@@ -12,6 +12,7 @@ struct MenuBarQuickCreateView: View {
     @State private var summary: String = ""
     @State private var isCreating: Bool = false
     @State private var errorMessage: String?
+    @State private var successMessage: String?
     @FocusState private var isSummaryFocused: Bool
 
     private var canCreate: Bool {
@@ -82,6 +83,17 @@ struct MenuBarQuickCreateView: View {
                 }
             }
 
+            if let success = successMessage {
+                HStack(spacing: 4) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.caption2)
+                        .foregroundColor(.green)
+                    Text(success)
+                        .font(.caption)
+                        .foregroundColor(.green)
+                }
+            }
+
             // Creating indicator
             if isCreating {
                 HStack(spacing: 6) {
@@ -131,20 +143,25 @@ struct MenuBarQuickCreateView: View {
             await MainActor.run {
                 isCreating = false
 
-                if success {
-                    Logger.shared.info("Created issue from menu bar: \(issueKey ?? "unknown")")
+                if success, let key = issueKey {
+                    Logger.shared.info("Created issue from menu bar: \(key)")
+                    // Show success message
+                    successMessage = "Issue created: \(key)"
                     // Clear the field
                     summary = ""
+                    errorMessage = nil
                     // Refresh issues to show the new one
                     Task {
                         await jiraService.fetchMyIssues(updateAvailableOptions: false)
                     }
-                    // Close the popover after a brief success moment
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    // Close the popover after showing success
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                        successMessage = nil
                         dismissAction()
                     }
                 } else {
                     errorMessage = "Failed to create issue"
+                    successMessage = nil
                 }
             }
         }
