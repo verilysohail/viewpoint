@@ -164,70 +164,77 @@ struct IssueDetailView: View {
 
     private var detailsTab: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                // Description
-                if let description = issueDetails.description {
-                    DetailSection(title: "Description") {
-                        Text(description)
-                            .font(.body)
-                            .foregroundColor(.primary)
-                            .textSelection(.enabled)
+            HStack(alignment: .top, spacing: 40) {
+                // Left column - Information
+                VStack(alignment: .leading, spacing: 20) {
+                    // Description
+                    if let description = issueDetails.description {
+                        DetailSection(title: "Description") {
+                            Text(description)
+                                .font(.body)
+                                .foregroundColor(.primary)
+                                .textSelection(.enabled)
+                        }
                     }
-                }
 
-                // Time tracking
-                if let originalEstimate = issueDetails.issue.fields.timeoriginalestimate,
-                   let timeSpent = issueDetails.issue.fields.timespent {
-                    DetailSection(title: "Time Tracking") {
-                        HStack(spacing: 30) {
-                            timeItem(label: "Original Estimate", seconds: originalEstimate)
-                            timeItem(label: "Time Spent", seconds: timeSpent)
-                            if let remaining = issueDetails.issue.fields.timeestimate {
-                                timeItem(label: "Remaining", seconds: remaining)
+                    // Components
+                    if !issueDetails.issue.fields.components.isEmpty {
+                        DetailSection(title: "Components") {
+                            HStack(spacing: 8) {
+                                ForEach(issueDetails.issue.fields.components, id: \.name) { component in
+                                    Text(component.name)
+                                        .font(.system(size: 11))
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 4)
+                                        .background(Color.blue.opacity(0.1))
+                                        .foregroundColor(.blue)
+                                        .cornerRadius(4)
+                                }
                             }
                         }
                     }
-                }
 
-                // Components
-                if !issueDetails.issue.fields.components.isEmpty {
-                    DetailSection(title: "Components") {
-                        HStack(spacing: 8) {
-                            ForEach(issueDetails.issue.fields.components, id: \.name) { component in
-                                Text(component.name)
-                                    .font(.system(size: 11))
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 4)
-                                    .background(Color.blue.opacity(0.1))
-                                    .foregroundColor(.blue)
-                                    .cornerRadius(4)
+                    // Dates
+                    DetailSection(title: "Dates") {
+                        VStack(alignment: .leading, spacing: 8) {
+                            if let created = issueDetails.issue.created {
+                                HStack {
+                                    Text("Created:")
+                                        .foregroundColor(.secondary)
+                                    Text(formatDate(created))
+                                        .foregroundColor(.primary)
+                                }
+                            }
+                            if let updated = issueDetails.issue.updated {
+                                HStack {
+                                    Text("Updated:")
+                                        .foregroundColor(.secondary)
+                                    Text(formatDate(updated))
+                                        .foregroundColor(.primary)
+                                }
                             }
                         }
+                        .font(.system(size: 12))
                     }
-                }
 
-                // Dates
-                DetailSection(title: "Dates") {
-                    VStack(alignment: .leading, spacing: 8) {
-                        if let created = issueDetails.issue.created {
-                            HStack {
-                                Text("Created:")
-                                    .foregroundColor(.secondary)
-                                Text(formatDate(created))
-                                    .foregroundColor(.primary)
-                            }
-                        }
-                        if let updated = issueDetails.issue.updated {
-                            HStack {
-                                Text("Updated:")
-                                    .foregroundColor(.secondary)
-                                Text(formatDate(updated))
-                                    .foregroundColor(.primary)
-                            }
-                        }
-                    }
-                    .font(.system(size: 12))
+                    Spacer()
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                // Right column - Editable fields
+                VStack(alignment: .leading, spacing: 20) {
+                    // Parent (Epic)
+                    IssueEpicSelector(issue: issueDetails.issue)
+
+                    // Estimate
+                    IssueEstimateEditor(issue: issueDetails.issue)
+
+                    // Log Time
+                    IssueLogTimeButton(issue: issueDetails.issue)
+
+                    Spacer()
+                }
+                .frame(width: 250, alignment: .leading)
             }
             .padding(.horizontal, 12)
             .padding(.top, 12)
@@ -504,6 +511,324 @@ struct IssueSprintSelector: View {
                 Logger.shared.info("Updated sprint for \(issue.key) to \(sprint?.name ?? "Backlog")")
             } else {
                 Logger.shared.error("Failed to update sprint for \(issue.key)")
+            }
+        }
+    }
+}
+
+// MARK: - Issue Epic Selector
+
+struct IssueEpicSelector: View {
+    let issue: JiraIssue
+    @EnvironmentObject var jiraService: JiraService
+    @State private var searchText: String = ""
+    @State private var availableEpics: [String: String] = [:] // epic key -> summary
+    @State private var isLoading = false
+
+    private var currentEpicKey: String? {
+        issue.fields.customfield_10014
+    }
+
+    private var currentEpicDisplay: String {
+        if let epicKey = currentEpicKey {
+            if let summary = availableEpics[epicKey] {
+                return "\(epicKey): \(summary)"
+            }
+            return epicKey
+        }
+        return "None"
+    }
+
+    private var filteredEpics: [(key: String, summary: String)] {
+        let epics = availableEpics.map { (key: $0.key, summary: $0.value) }
+        if searchText.isEmpty {
+            return epics.sorted { $0.key > $1.key }
+        }
+        return epics.filter {
+            $0.key.lowercased().contains(searchText.lowercased()) ||
+            $0.summary.lowercased().contains(searchText.lowercased())
+        }.sorted { $0.key > $1.key }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Parent")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(.primary)
+
+            Menu {
+                Button("None") {
+                    updateEpic(to: nil)
+                }
+
+                Divider()
+
+                TextField("Search epics...", text: $searchText)
+                    .textFieldStyle(.roundedBorder)
+                    .padding(.horizontal, 8)
+
+                Divider()
+
+                if isLoading {
+                    HStack {
+                        ProgressView()
+                            .scaleEffect(0.7)
+                        Text("Loading epics...")
+                    }
+                } else {
+                    ForEach(filteredEpics, id: \.key) { epic in
+                        Button(action: {
+                            updateEpic(to: epic.key)
+                        }) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(epic.key)
+                                    .font(.system(size: 11, design: .monospaced))
+                                    .foregroundColor(.secondary)
+                                Text(epic.summary)
+                                    .font(.system(size: 12))
+                            }
+                        }
+                    }
+                }
+            } label: {
+                HStack {
+                    Text(currentEpicDisplay)
+                        .font(.system(size: 12))
+                        .foregroundColor(currentEpicKey == nil ? .secondary : .purple)
+                        .lineLimit(2)
+                    Spacer()
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 8))
+                        .foregroundColor(.secondary)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Color(NSColor.controlBackgroundColor))
+                .cornerRadius(6)
+            }
+            .buttonStyle(.plain)
+        }
+        .task {
+            await loadEpics()
+        }
+    }
+
+    private func loadEpics() async {
+        isLoading = true
+        let projectName = issue.project
+
+        // Build JQL to find all epics in this project
+        let jql = "project = \"\(projectName)\" AND type = Epic AND resolution = Unresolved ORDER BY created DESC"
+
+        var components = URLComponents(string: "\(jiraService.config.jiraBaseURL)/rest/api/3/search/jql")!
+        components.queryItems = [
+            URLQueryItem(name: "jql", value: jql),
+            URLQueryItem(name: "maxResults", value: "100"),
+            URLQueryItem(name: "fields", value: "summary")
+        ]
+
+        guard let url = components.url else {
+            isLoading = false
+            return
+        }
+
+        var request = URLRequest(url: url)
+        let credentials = "\(jiraService.config.jiraEmail):\(jiraService.config.jiraAPIKey)"
+        let credentialData = credentials.data(using: .utf8)!
+        let base64Credentials = credentialData.base64EncodedString()
+        request.setValue("Basic \(base64Credentials)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+                Logger.shared.error("Failed to fetch epics")
+                isLoading = false
+                return
+            }
+
+            if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let issues = json["issues"] as? [[String: Any]] {
+                var epics: [String: String] = [:]
+                for issue in issues {
+                    if let key = issue["key"] as? String,
+                       let fields = issue["fields"] as? [String: Any],
+                       let summary = fields["summary"] as? String {
+                        epics[key] = summary
+                    }
+                }
+                await MainActor.run {
+                    self.availableEpics = epics
+                }
+            }
+        } catch {
+            Logger.shared.error("Error fetching epics: \(error)")
+        }
+
+        isLoading = false
+    }
+
+    private func updateEpic(to epicKey: String?) {
+        Task {
+            let success = await jiraService.updateIssue(
+                issueKey: issue.key,
+                fields: epicKey == nil ? ["customfield_10014": NSNull()] : ["epic": epicKey!]
+            )
+
+            if success {
+                Logger.shared.info("Updated epic for \(issue.key) to \(epicKey ?? "None")")
+            } else {
+                Logger.shared.error("Failed to update epic for \(issue.key)")
+            }
+        }
+    }
+}
+
+// MARK: - Issue Estimate Editor
+
+struct IssueEstimateEditor: View {
+    let issue: JiraIssue
+    @EnvironmentObject var jiraService: JiraService
+    @State private var isEditing = false
+    @State private var editValue: String = ""
+
+    private var currentEstimate: String {
+        if let seconds = issue.fields.timeoriginalestimate {
+            return formatTime(seconds: seconds)
+        }
+        return "None"
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Estimate")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(.primary)
+
+            if isEditing {
+                HStack(spacing: 6) {
+                    TextField("e.g., 2h, 30m, 1d", text: $editValue)
+                        .textFieldStyle(.roundedBorder)
+                        .font(.system(size: 12))
+
+                    Button(action: saveEstimate) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundColor(.green)
+                    }
+                    .buttonStyle(.plain)
+
+                    Button(action: { isEditing = false }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(.red)
+                    }
+                    .buttonStyle(.plain)
+                }
+            } else {
+                Button(action: {
+                    editValue = currentEstimate == "None" ? "" : currentEstimate
+                    isEditing = true
+                }) {
+                    HStack {
+                        Text(currentEstimate)
+                            .font(.system(size: 12))
+                            .foregroundColor(currentEstimate == "None" ? .secondary : .primary)
+                        Spacer()
+                        Image(systemName: "pencil")
+                            .font(.system(size: 10))
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Color(NSColor.controlBackgroundColor))
+                    .cornerRadius(6)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    private func formatTime(seconds: Int) -> String {
+        let hours = seconds / 3600
+        let minutes = (seconds % 3600) / 60
+
+        if hours >= 8 {
+            let days = hours / 8
+            let remainingHours = hours % 8
+            if remainingHours == 0 {
+                return "\(days)d"
+            }
+            return "\(days)d \(remainingHours)h"
+        } else if hours > 0 {
+            if minutes > 0 {
+                return "\(hours)h \(minutes)m"
+            }
+            return "\(hours)h"
+        } else if minutes > 0 {
+            return "\(minutes)m"
+        }
+        return "0m"
+    }
+
+    private func saveEstimate() {
+        guard !editValue.isEmpty else {
+            isEditing = false
+            return
+        }
+
+        Task {
+            let success = await jiraService.updateIssue(
+                issueKey: issue.key,
+                fields: ["originalEstimate": editValue]
+            )
+
+            await MainActor.run {
+                if success {
+                    Logger.shared.info("Updated estimate for \(issue.key) to \(editValue)")
+                    isEditing = false
+                } else {
+                    Logger.shared.error("Failed to update estimate for \(issue.key)")
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Issue Log Time Button
+
+struct IssueLogTimeButton: View {
+    let issue: JiraIssue
+    @EnvironmentObject var jiraService: JiraService
+    @State private var showingLogWork = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Log Time")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(.primary)
+
+            Button(action: {
+                showingLogWork = true
+            }) {
+                HStack {
+                    Image(systemName: "clock")
+                        .font(.system(size: 12))
+                    Text("Log work")
+                        .font(.system(size: 12))
+                    Spacer()
+                    Image(systemName: "plus.circle")
+                        .font(.system(size: 10))
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Color.blue.opacity(0.1))
+                .foregroundColor(.blue)
+                .cornerRadius(6)
+            }
+            .buttonStyle(.plain)
+            .sheet(isPresented: $showingLogWork) {
+                LogWorkView(issue: issue, isPresented: $showingLogWork)
+                    .environmentObject(jiraService)
             }
         }
     }
