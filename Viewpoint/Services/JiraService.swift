@@ -755,7 +755,10 @@ class JiraService: ObservableObject {
             let summaries = Dictionary(uniqueKeysWithValues: searchResponse.issues.map { ($0.key, $0.fields.summary) })
 
             await MainActor.run {
-                self.epicSummaries = summaries
+                // Merge new summaries with existing ones (don't replace)
+                for (key, value) in summaries {
+                    self.epicSummaries[key] = value
+                }
             }
         } catch {
             Logger.shared.error("Failed to fetch epic summaries: \(error)")
