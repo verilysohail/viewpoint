@@ -286,6 +286,11 @@ struct ContentView: View {
             ManageViewsSheet(isPresented: $showingManageViewsSheet)
                 .environmentObject(viewsManager)
         }
+        .sheet(isPresented: $showingCreateIssue) {
+            QuickCreateIssueView(isPresented: $showingCreateIssue)
+                .environmentObject(jiraService)
+                .frame(width: 400, height: 150)
+        }
         .toolbar(id: "mainToolbar") {
             ToolbarItem(id: "toggleFilters", placement: .navigation, showsByDefault: true) {
                 Button(action: { showFilters.toggle() }) {
@@ -337,10 +342,6 @@ struct ContentView: View {
                 }
                 .keyboardShortcut("n", modifiers: .command)
                 .help("Create new issue (⌘N)")
-                .popover(isPresented: $showingCreateIssue, arrowEdge: .bottom) {
-                    QuickCreateIssueView(isPresented: $showingCreateIssue)
-                        .environmentObject(jiraService)
-                }
             }
 
             ToolbarItem(id: "logWork", placement: .automatic, showsByDefault: true) {
