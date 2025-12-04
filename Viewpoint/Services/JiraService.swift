@@ -34,6 +34,9 @@ class JiraService: ObservableObject {
     // Sprint to project associations (sprint ID -> set of project keys)
     var sprintProjectMap: [Int: Set<String>] = [:]
 
+    // Cache of sprints per project key
+    @Published var projectSprintsCache: [String: [JiraSprint]] = [:]
+
     // Current filters
     @Published var filters = IssueFilters()
 
@@ -49,7 +52,7 @@ class JiraService: ObservableObject {
         set { UserDefaults.standard.set(newValue, forKey: "jiraAccountId") }
     }
 
-    // Filtered sprints based on selected projects and loaded issues
+    // Filtered sprints based on selected projects
     var filteredSprints: [JiraSprint] {
         // If no projects selected, show sprints from current issues
         if filters.projects.isEmpty {
@@ -60,11 +63,37 @@ class JiraService: ObservableObject {
 
             return availableSprints.filter { sprintsInIssues.contains($0.id) }
         } else {
-            // Show sprints from issues that match selected projects
-            let projectIssues = issues.filter { filters.projects.contains($0.project) }
-            let sprintsInProjects = Set(projectIssues.compactMap { issue in
-                issue.fields.customfield_10020?.compactMap { $0.id }
-            }.flatMap { $0 })
+            // Map selected project names to project keys
+            let projectKeys = Set(issues
+                .filter { filters.projects.contains($0.project) }
+                .map { $0.fields.project.key })
+
+            Logger.shared.info("Filtering sprints for projects: \(filters.projects)")
+            Logger.shared.info("Project keys: \(projectKeys)")
+
+            // Use cached sprints for these projects if available
+            let cachedProjectSprints = projectKeys.flatMap { projectKey in
+                projectSprintsCache[projectKey] ?? []
+            }
+
+            if !cachedProjectSprints.isEmpty {
+                Logger.shared.info("Returning \(cachedProjectSprints.count) cached sprints for projects")
+                return cachedProjectSprints.sorted { $0.id > $1.id }
+            }
+
+            // Otherwise, trigger async fetch and return sprints from issues for now
+            Logger.shared.info("No cached sprints, fetching from API and showing issue sprints for now")
+            for projectKey in projectKeys {
+                Task {
+                    await fetchAndCacheSprintsForProject(projectKey: projectKey)
+                }
+            }
+
+            // Return sprints from currently loaded issues as a fallback
+            let sprintsInProjects = Set(issues
+                .filter { filters.projects.contains($0.project) }
+                .compactMap { $0.fields.customfield_10020?.compactMap { $0.id } }
+                .flatMap { $0 })
 
             return availableSprints.filter { sprintsInProjects.contains($0.id) }
         }
@@ -483,9 +512,18 @@ class JiraService: ObservableObject {
         return nil
     }
 
-    func fetchSprints() async {
-        let urlString = "\(config.jiraBaseURL)/rest/agile/1.0/board"
+    func fetchAndCacheSprintsForProject(projectKey: String) async {
+        Logger.shared.info("Fetching sprints for project: \(projectKey)")
 
+        // Check if already cached
+        let cached = await MainActor.run { projectSprintsCache[projectKey] }
+        if cached != nil {
+            Logger.shared.info("Sprints for \(projectKey) already cached")
+            return
+        }
+
+        // Fetch boards for this project
+        let urlString = "\(config.jiraBaseURL)/rest/agile/1.0/board?projectKeyOrId=\(projectKey)&type=scrum"
         guard let url = URL(string: urlString) else { return }
 
         let request = createRequest(url: url)
@@ -493,60 +531,41 @@ class JiraService: ObservableObject {
         do {
             let (data, _) = try await URLSession.shared.data(for: request)
 
-            // Parse boards and fetch sprints from ALL boards
             if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-               let values = json["values"] as? [[String: Any]] {
+               let boards = json["values"] as? [[String: Any]] {
 
-                Logger.shared.info("Found \(values.count) boards")
+                Logger.shared.info("Found \(boards.count) Scrum boards for project \(projectKey)")
 
-                // Fetch sprints from all boards and track project associations
                 var allSprints: [JiraSprint] = []
 
-                for board in values {
+                for board in boards {
                     if let boardId = board["id"] as? Int {
-                        // Extract project key(s) from board location
-                        var projectKeys: Set<String> = []
-                        if let location = board["location"] as? [String: Any],
-                           let projectKey = location["projectKey"] as? String {
-                            projectKeys.insert(projectKey)
-                        }
-
                         let boardSprints = await fetchSprintsForBoard(boardId: boardId)
                         allSprints.append(contentsOf: boardSprints)
-
-                        // Associate these sprints with the board's project(s)
-                        for sprint in boardSprints {
-                            if !projectKeys.isEmpty {
-                                await MainActor.run {
-                                    if self.sprintProjectMap[sprint.id] == nil {
-                                        self.sprintProjectMap[sprint.id] = projectKeys
-                                    } else {
-                                        self.sprintProjectMap[sprint.id]?.formUnion(projectKeys)
-                                    }
-                                }
-                            }
-                        }
+                        Logger.shared.info("Board \(boardId) contributed \(boardSprints.count) sprints for \(projectKey)")
                     }
                 }
 
-                // Remove duplicates based on sprint ID
+                // Remove duplicates
                 let uniqueSprints = Dictionary(grouping: allSprints, by: { $0.id })
                     .compactMap { $0.value.first }
-                    .sorted { $0.id > $1.id } // Most recent first
+                    .sorted { $0.id > $1.id }
+
+                Logger.shared.info("Caching \(uniqueSprints.count) total sprints for project \(projectKey)")
 
                 await MainActor.run {
-                    self.sprints = uniqueSprints
-                    self.availableSprints = uniqueSprints // Also populate available sprints for filters
-                    if let activeSprint = uniqueSprints.first(where: { $0.state == "active" }) {
-                        Task {
-                            await self.fetchSprintInfo(sprintId: activeSprint.id)
-                        }
-                    }
+                    self.projectSprintsCache[projectKey] = uniqueSprints
                 }
             }
         } catch {
-            Logger.shared.error("Failed to fetch boards: \(error)")
+            Logger.shared.error("Failed to fetch sprints for project \(projectKey): \(error)")
         }
+    }
+
+    func fetchSprints() async {
+        // Sprints are now fetched on-demand per project when needed
+        // This function is kept for compatibility but does nothing
+        Logger.shared.info("fetchSprints() called - sprints will be fetched on-demand per project")
     }
 
     func fetchAvailableProjects() async {
