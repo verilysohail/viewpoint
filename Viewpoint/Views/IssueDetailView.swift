@@ -495,18 +495,9 @@ struct IssueSprintSelector: View {
 
     private func updateSprint(to sprint: JiraSprint?) {
         Task {
-            var updateFields: [String: Any] = [:]
-
-            if let sprint = sprint {
-                updateFields["sprint"] = "\(sprint.id)"
-            } else {
-                // Moving to backlog - remove from sprint
-                updateFields["sprint"] = NSNull()
-            }
-
-            let success = await jiraService.updateIssue(
+            let success = await jiraService.moveIssueToSprint(
                 issueKey: issue.key,
-                fields: updateFields
+                sprintId: sprint?.id
             )
 
             if success {

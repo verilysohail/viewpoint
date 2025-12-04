@@ -9,7 +9,7 @@ struct PersistentSplitView<Top: View, Bottom: View>: NSViewRepresentable {
     func makeNSView(context: Context) -> NSSplitView {
         let splitView = NSSplitView()
         splitView.isVertical = false
-        splitView.dividerStyle = .thin
+        splitView.dividerStyle = .paneSplitter
         splitView.delegate = context.coordinator
 
         let topHostingView = NSHostingView(rootView: top)

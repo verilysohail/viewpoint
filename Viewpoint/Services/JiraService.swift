@@ -900,7 +900,9 @@ class JiraService: ObservableObject {
                 // Find the best matching transition using smart matching
                 if let (matchedTransition, matchType) = findBestTransition(query: newStatus, transitions: transitions),
                    let transitionId = matchedTransition["id"] as? String,
-                   let transitionName = matchedTransition["name"] as? String {
+                   let transitionName = matchedTransition["name"] as? String,
+                   let to = matchedTransition["to"] as? [String: Any],
+                   let targetStatus = to["name"] as? String {
 
                     Logger.shared.info("Matched '\(newStatus)' to transition '\(transitionName)' using \(matchType)")
 
@@ -933,6 +935,17 @@ class JiraService: ObservableObject {
                     if let httpResponse = response as? HTTPURLResponse,
                        httpResponse.statusCode == 204 || httpResponse.statusCode == 200 {
                         Logger.shared.info("Successfully transitioned \(issueKey) to \(newStatus)")
+
+                        // Optimistically update local issues array
+                        await MainActor.run {
+                            if let index = issues.firstIndex(where: { $0.key == issueKey }) {
+                                var updatedIssue = issues[index]
+                                updatedIssue.status = targetStatus
+                                issues[index] = updatedIssue
+                                Logger.shared.info("Optimistically updated \(issueKey) status to '\(targetStatus)' in local cache")
+                            }
+                        }
+
                         return true
                     }
                 }
@@ -1084,6 +1097,186 @@ class JiraService: ObservableObject {
         } catch {
             Logger.shared.error("Failed to log work: \(error)")
             return false
+        }
+    }
+
+    func fetchJQLAutocompleteSuggestions(fieldName: String, query: String = "") async -> [String] {
+        // Use Jira's autocomplete API to get all available values for a field
+        let encodedField = fieldName.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? fieldName
+        let encodedQuery = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? query
+
+        // Map common field names to their Jira autocomplete equivalents
+        let apiFieldName: String
+        switch fieldName.lowercased() {
+        case "assignee":
+            apiFieldName = "assignee"
+        case "project":
+            apiFieldName = "project"
+        case "status":
+            apiFieldName = "status"
+        case "type", "issuetype":
+            apiFieldName = "issuetype"
+        case "priority":
+            apiFieldName = "priority"
+        case "component", "components":
+            apiFieldName = "component"
+        default:
+            apiFieldName = fieldName
+        }
+
+        let urlString = "\(config.jiraBaseURL)/rest/api/3/jql/autocompletedata/suggestions?fieldName=\(apiFieldName)&fieldValue=\(encodedQuery)"
+
+        guard let url = URL(string: urlString) else {
+            Logger.shared.error("Invalid URL for JQL autocomplete")
+            return []
+        }
+
+        let request = createRequest(url: url)
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw URLError(.badServerResponse)
+            }
+
+            if httpResponse.statusCode == 200,
+               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let results = json["results"] as? [[String: Any]] {
+
+                // Extract display names from results
+                let suggestions = results.compactMap { result -> String? in
+                    if let displayName = result["displayName"] as? String {
+                        return displayName
+                    } else if let value = result["value"] as? String {
+                        return value
+                    }
+                    return nil
+                }
+
+                Logger.shared.info("Fetched \(suggestions.count) autocomplete suggestions for \(fieldName)")
+                return suggestions
+            }
+        } catch {
+            Logger.shared.error("Failed to fetch autocomplete suggestions: \(error)")
+        }
+
+        return []
+    }
+
+    func moveIssueToSprint(issueKey: String, sprintId: Int?) async -> Bool {
+        if let sprintId = sprintId {
+            // Move issue to sprint using Agile API
+            let urlString = "\(config.jiraBaseURL)/rest/agile/1.0/sprint/\(sprintId)/issue"
+
+            guard let url = URL(string: urlString) else {
+                Logger.shared.error("Invalid URL for moving issue to sprint")
+                return false
+            }
+
+            var request = createRequest(url: url)
+            request.httpMethod = "POST"
+
+            let requestBody: [String: Any] = [
+                "issues": [issueKey]
+            ]
+
+            do {
+                request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
+
+                Logger.shared.info("Moving \(issueKey) to sprint \(sprintId)")
+
+                let (data, response) = try await URLSession.shared.data(for: request)
+
+                guard let httpResponse = response as? HTTPURLResponse else {
+                    throw URLError(.badServerResponse)
+                }
+
+                Logger.shared.info("Move to sprint response status: \(httpResponse.statusCode)")
+
+                if httpResponse.statusCode == 204 || httpResponse.statusCode == 200 {
+                    Logger.shared.info("Successfully moved \(issueKey) to sprint \(sprintId)")
+
+                    // Optimistically update local issues array
+                    await MainActor.run {
+                        if let index = issues.firstIndex(where: { $0.key == issueKey }) {
+                            // Find sprint details from availableSprints
+                            if let sprint = availableSprints.first(where: { $0.id == sprintId }) {
+                                var updatedIssue = issues[index]
+                                updatedIssue.fields.customfield_10020 = [sprint]
+                                issues[index] = updatedIssue
+                                Logger.shared.info("Optimistically updated \(issueKey) sprint in local cache")
+                            }
+                        }
+                    }
+
+                    return true
+                } else {
+                    if let errorMessage = String(data: data, encoding: .utf8) {
+                        Logger.shared.error("Error moving to sprint: \(errorMessage)")
+                    }
+                    return false
+                }
+            } catch {
+                Logger.shared.error("Failed to move issue to sprint: \(error)")
+                return false
+            }
+        } else {
+            // Move issue to backlog by setting customfield_10020 to null
+            // Use the standard update API with the sprint custom field
+            let urlString = "\(config.jiraBaseURL)/rest/api/3/issue/\(issueKey)"
+
+            guard let url = URL(string: urlString) else {
+                Logger.shared.error("Invalid URL for moving issue to backlog")
+                return false
+            }
+
+            var request = createRequest(url: url)
+            request.httpMethod = "PUT"
+
+            let requestBody: [String: Any] = [
+                "fields": [
+                    "customfield_10020": NSNull()
+                ]
+            ]
+
+            do {
+                request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
+
+                Logger.shared.info("Moving \(issueKey) to backlog (removing from sprint)")
+
+                let (data, response) = try await URLSession.shared.data(for: request)
+
+                guard let httpResponse = response as? HTTPURLResponse else {
+                    throw URLError(.badServerResponse)
+                }
+
+                Logger.shared.info("Move to backlog response status: \(httpResponse.statusCode)")
+
+                if httpResponse.statusCode == 204 || httpResponse.statusCode == 200 {
+                    Logger.shared.info("Successfully moved \(issueKey) to backlog")
+
+                    // Optimistically update local issues array
+                    await MainActor.run {
+                        if let index = issues.firstIndex(where: { $0.key == issueKey }) {
+                            var updatedIssue = issues[index]
+                            updatedIssue.fields.customfield_10020 = nil
+                            issues[index] = updatedIssue
+                            Logger.shared.info("Optimistically updated \(issueKey) to backlog in local cache")
+                        }
+                    }
+
+                    return true
+                } else {
+                    if let errorMessage = String(data: data, encoding: .utf8) {
+                        Logger.shared.error("Error moving to backlog: \(errorMessage)")
+                    }
+                    return false
+                }
+            } catch {
+                Logger.shared.error("Failed to move issue to backlog: \(error)")
+                return false
+            }
         }
     }
 

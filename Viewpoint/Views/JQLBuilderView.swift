@@ -7,6 +7,7 @@ struct JQLBuilderView: View {
     @State private var showSuggestions: Bool = false
     @State private var selectedSuggestionIndex: Int = 0
     @State private var isFocused: Bool = false
+    @State private var fetchTask: Task<Void, Never>?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -142,19 +143,107 @@ struct JQLBuilderView: View {
                 jqlText = newJQL
             }
         }
+        .onDisappear {
+            fetchTask?.cancel()
+        }
     }
 
     // MARK: - Autocomplete Logic
 
     private func updateSuggestions() {
-        let context = determineContext()
-        suggestions = generateSuggestions(for: context)
-        showSuggestions = !suggestions.isEmpty && isFocused
-        selectedSuggestionIndex = 0
+        // Cancel any pending fetch
+        fetchTask?.cancel()
 
-        Logger.shared.info("Context: \(context), Suggestions count: \(suggestions.count), Will show: \(showSuggestions)")
-        if suggestions.count > 0 && suggestions.count <= 5 {
-            Logger.shared.info("Suggestions: \(suggestions.map { $0.text }.joined(separator: ", "))")
+        let context = determineContext()
+
+        // For value context, we might need to fetch from API
+        if context == .value {
+            fetchTask = Task {
+                await generateValueSuggestionsAsync(context: context)
+            }
+        } else {
+            suggestions = generateSuggestions(for: context)
+            showSuggestions = !suggestions.isEmpty && isFocused
+            selectedSuggestionIndex = 0
+
+            Logger.shared.info("Context: \(context), Suggestions count: \(suggestions.count), Will show: \(showSuggestions)")
+            if suggestions.count > 0 && suggestions.count <= 5 {
+                Logger.shared.info("Suggestions: \(suggestions.map { $0.text }.joined(separator: ", "))")
+            }
+        }
+    }
+
+    private func generateValueSuggestionsAsync(context: JQLTokenContext) async {
+        let currentInput = getCurrentToken().lowercased()
+
+        guard let fieldName = getPreviousFieldName(),
+              let field = JQLField.find(name: fieldName) else {
+            await MainActor.run {
+                suggestions = []
+                showSuggestions = false
+            }
+            return
+        }
+
+        var newSuggestions: [JQLSuggestion] = []
+
+        // Add special values for user fields
+        if field.valueType == .user {
+            newSuggestions.append(JQLSuggestion(
+                text: "currentUser()",
+                type: .value,
+                description: "The currently logged in user"
+            ))
+        }
+
+        // Fetch from Jira API for better autocomplete
+        switch field.name.lowercased() {
+        case "assignee", "project", "status", "type", "issuetype", "component", "components", "priority":
+            let apiSuggestions = await jiraService.fetchJQLAutocompleteSuggestions(
+                fieldName: field.name,
+                query: currentInput
+            )
+
+            newSuggestions += apiSuggestions
+                .filter { currentInput.isEmpty || $0.lowercased().contains(currentInput) }
+                .sorted()
+                .map { value in
+                    JQLSuggestion(
+                        text: "\"\(value)\"",
+                        displayText: value,
+                        type: .value,
+                        description: nil
+                    )
+                }
+
+        case "sprint":
+            // Still use cached sprints for sprint field
+            newSuggestions += jiraService.availableSprints
+                .filter { sprint in
+                    currentInput.isEmpty ||
+                    sprint.name.lowercased().contains(currentInput) ||
+                    String(sprint.id).contains(currentInput)
+                }
+                .sorted { $0.id > $1.id }
+                .map { sprint in
+                    JQLSuggestion(
+                        text: String(sprint.id),
+                        displayText: "\(sprint.name) (ID: \(sprint.id))",
+                        type: .value,
+                        description: sprint.state
+                    )
+                }
+
+        default:
+            break
+        }
+
+        await MainActor.run {
+            self.suggestions = newSuggestions
+            self.showSuggestions = !newSuggestions.isEmpty && self.isFocused
+            self.selectedSuggestionIndex = 0
+
+            Logger.shared.info("Context: \(context), Fetched suggestions count: \(newSuggestions.count)")
         }
     }
 

@@ -185,13 +185,7 @@ struct FilterPanel: View {
                 ) {
                     expandedSections.toggle(.epic)
                 } content: {
-                    MultiSelectFilter(
-                        options: Array(jiraService.availableEpics),
-                        selectedOptions: Binding(
-                            get: { jiraService.filters.epics },
-                            set: { jiraService.filters.epics = $0 }
-                        )
-                    )
+                    EpicSelector()
                 }
 
                 Divider()
@@ -361,6 +355,52 @@ struct SprintSelector: View {
         case "future": return .blue
         case "closed": return .gray
         default: return .gray
+        }
+    }
+}
+
+// MARK: - Epic Selector
+
+struct EpicSelector: View {
+    @EnvironmentObject var jiraService: JiraService
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            if jiraService.availableEpics.isEmpty {
+                Text("No epics available")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .padding(.vertical, 4)
+            } else {
+                ForEach(Array(jiraService.availableEpics).sorted(), id: \.self) { epicKey in
+                    Toggle(isOn: Binding(
+                        get: { jiraService.filters.epics.contains(epicKey) },
+                        set: { isSelected in
+                            if isSelected {
+                                jiraService.filters.epics.insert(epicKey)
+                            } else {
+                                jiraService.filters.epics.remove(epicKey)
+                            }
+                            jiraService.applyFilters()
+                        }
+                    )) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            if let summary = jiraService.epicSummaries[epicKey] {
+                                Text(summary)
+                                    .font(.caption)
+                                    .lineLimit(2)
+                                Text(epicKey)
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                            } else {
+                                Text(epicKey)
+                                    .font(.caption)
+                            }
+                        }
+                    }
+                    .toggleStyle(.checkbox)
+                }
+            }
         }
     }
 }
