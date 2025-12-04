@@ -577,16 +577,8 @@ struct IssueEpicSelector: View {
                     }
                 } else {
                     ForEach(filteredEpics, id: \.key) { epic in
-                        Button(action: {
+                        Button("\(epic.key): \(epic.summary)") {
                             updateEpic(to: epic.key)
-                        }) {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(epic.key)
-                                    .font(.system(size: 11, design: .monospaced))
-                                    .foregroundColor(.secondary)
-                                Text(epic.summary)
-                                    .font(.system(size: 12))
-                            }
                         }
                     }
                 }
