@@ -3,6 +3,11 @@ import SwiftUI
 struct SettingsView: View {
     var body: some View {
         TabView {
+            GeneralSettingsTab()
+                .tabItem {
+                    Label("General", systemImage: "gearshape")
+                }
+
             ConnectionSettingsTab()
                 .tabItem {
                     Label("Connection", systemImage: "network")
@@ -30,6 +35,54 @@ struct SettingsView: View {
         }
         .padding(20)
         .frame(width: 600, height: 550)
+    }
+}
+
+// MARK: - General Settings Tab
+
+struct GeneralSettingsTab: View {
+    @AppStorage("showMenuBarIcon") private var showMenuBarIcon: Bool = true
+
+    var body: some View {
+        Form {
+            Section {
+                Text("General Settings")
+                    .font(.headline)
+                    .padding(.bottom, 4)
+
+                VStack(alignment: .leading, spacing: 12) {
+                    Toggle(isOn: $showMenuBarIcon) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Show Menu Bar Icon")
+                                .font(.subheadline)
+                            Text("Display a quick create icon in the menu bar for creating issues from anywhere")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+
+                    if showMenuBarIcon {
+                        HStack(spacing: 8) {
+                            Image(systemName: "info.circle")
+                                .font(.caption)
+                                .foregroundColor(.blue)
+                            Text("Click the ")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            + Text(Image(systemName: "plus.circle.fill"))
+                                .font(.caption)
+                                .foregroundColor(.blue)
+                            + Text(" icon in your menu bar to quickly create issues")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(.leading, 20)
+                    }
+                }
+            }
+
+            Spacer()
+        }
     }
 }
 

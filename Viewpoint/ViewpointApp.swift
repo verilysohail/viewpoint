@@ -1,10 +1,13 @@
 import SwiftUI
+import AppKit
 
 @main
 struct ViewpointApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var jiraService = JiraService()
     @StateObject private var viewsManager = ViewsManager()
     @AppStorage("hasCompletedSetup") private var hasCompletedSetup = false
+    @AppStorage("showMenuBarIcon") private var showMenuBarIcon = true
 
     var body: some Scene {
         WindowGroup {
@@ -14,6 +17,11 @@ struct ViewpointApp: App {
                 .frame(minWidth: 1000, minHeight: 600)
                 .onAppear {
                     checkFirstRun()
+                    appDelegate.configure(with: jiraService)
+                    updateMenuBarIcon()
+                }
+                .onChange(of: showMenuBarIcon) { _ in
+                    updateMenuBarIcon()
                 }
         }
         .windowStyle(.hiddenTitleBar)
@@ -68,5 +76,43 @@ struct ViewpointApp: App {
         let apiKey = KeychainHelper.load(key: "jiraAPIKey") ?? ""
 
         return !baseURL.isEmpty && !email.isEmpty && !apiKey.isEmpty
+    }
+
+    private func updateMenuBarIcon() {
+        if let delegate = NSApp.delegate as? AppDelegate {
+            if showMenuBarIcon {
+                delegate.showMenuBar()
+            } else {
+                delegate.hideMenuBar()
+            }
+        }
+    }
+}
+
+// MARK: - App Delegate
+
+class AppDelegate: NSObject, NSApplicationDelegate {
+    private var menuBarManager: MenuBarManager?
+
+    func configure(with jiraService: JiraService) {
+        menuBarManager = MenuBarManager(jiraService: jiraService)
+    }
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        // Configure app to stay running when all windows are closed
+        NSApp.setActivationPolicy(.regular)
+    }
+
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        // Keep app running in background
+        return false
+    }
+
+    func showMenuBar() {
+        menuBarManager?.setupMenuBar()
+    }
+
+    func hideMenuBar() {
+        menuBarManager?.removeMenuBar()
     }
 }

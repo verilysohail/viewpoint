@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		4EFE67 /* ManageViewsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C76CE /* ManageViewsSheet.swift */; };
+		54A55E /* SaveViewDialog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 069156 /* SaveViewDialog.swift */; };
 		A6BACF672ED7C002000A4D2B /* JQLAutocomplete.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6BACF662ED7C002000A4D2B /* JQLAutocomplete.swift */; };
 		A6BACF692ED7C013000A4D2B /* JQLBuilderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6BACF682ED7C013000A4D2B /* JQLBuilderView.swift */; };
 		A6CBA4BA2ED0395200528322 /* WhisperService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6CBA4B92ED0395200528322 /* WhisperService.swift */; };
@@ -18,6 +20,8 @@
 		A6CBA4C72ED039CE00528322 /* WhisperKit in Frameworks */ = {isa = PBXBuildFile; productRef = A6CBA4C62ED039CE00528322 /* WhisperKit */; };
 		A6CBA4CA2ED03EF400528322 /* VertexAIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6CBA4C92ED03EF400528322 /* VertexAIClient.swift */; };
 		A6CBA4CB2ED03EF400528322 /* AIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6CBA4C82ED03EF400528322 /* AIService.swift */; };
+		A6F144C32EE16DF5006F5F2C /* MenuBarManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6F144C22EE16DF5006F5F2C /* MenuBarManager.swift */; };
+		A6F144C52EE16E04006F5F2C /* MenuBarQuickCreateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6F144C42EE16E04006F5F2C /* MenuBarQuickCreateView.swift */; };
 		AA0001 /* ViewpointApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0001 /* ViewpointApp.swift */; };
 		AA0002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0002 /* ContentView.swift */; };
 		AA0003 /* JiraModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0003 /* JiraModels.swift */; };
@@ -31,11 +35,12 @@
 		AA0011 /* Logger.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0013 /* Logger.swift */; };
 		AA0012 /* IssueDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0014 /* IssueDetailView.swift */; };
 		B32940 /* SavedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B4DE6 /* SavedView.swift */; };
-		54A55E /* SaveViewDialog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 069156 /* SaveViewDialog.swift */; };
-		4EFE67 /* ManageViewsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C76CE /* ManageViewsSheet.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		069156 /* SaveViewDialog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveViewDialog.swift; sourceTree = "<group>"; };
+		2B4DE6 /* SavedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedView.swift; sourceTree = "<group>"; };
+		6C76CE /* ManageViewsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManageViewsSheet.swift; sourceTree = "<group>"; };
 		A6BACF662ED7C002000A4D2B /* JQLAutocomplete.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JQLAutocomplete.swift; sourceTree = "<group>"; };
 		A6BACF682ED7C013000A4D2B /* JQLBuilderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JQLBuilderView.swift; sourceTree = "<group>"; };
 		A6CBA4B82ED0395200528322 /* AudioRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioRecorder.swift; sourceTree = "<group>"; };
@@ -46,6 +51,8 @@
 		A6CBA4C22ED0398E00528322 /* VisualEffectView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VisualEffectView.swift; sourceTree = "<group>"; };
 		A6CBA4C82ED03EF400528322 /* AIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIService.swift; sourceTree = "<group>"; };
 		A6CBA4C92ED03EF400528322 /* VertexAIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VertexAIClient.swift; sourceTree = "<group>"; };
+		A6F144C22EE16DF5006F5F2C /* MenuBarManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarManager.swift; sourceTree = "<group>"; };
+		A6F144C42EE16E04006F5F2C /* MenuBarQuickCreateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarQuickCreateView.swift; sourceTree = "<group>"; };
 		BB0001 /* ViewpointApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewpointApp.swift; sourceTree = "<group>"; };
 		BB0002 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		BB0003 /* JiraModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JiraModels.swift; sourceTree = "<group>"; };
@@ -60,9 +67,6 @@
 		BB0012 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		BB0013 /* Logger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Logger.swift; sourceTree = "<group>"; };
 		BB0014 /* IssueDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IssueDetailView.swift; sourceTree = "<group>"; };
-		2B4DE6 /* SavedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedView.swift; sourceTree = "<group>"; };
-		069156 /* SaveViewDialog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveViewDialog.swift; sourceTree = "<group>"; };
-		6C76CE /* ManageViewsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManageViewsSheet.swift; sourceTree = "<group>"; };
 		CC0001 /* Viewpoint.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Viewpoint.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -125,6 +129,7 @@
 		FF0003 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				A6F144C22EE16DF5006F5F2C /* MenuBarManager.swift */,
 				BB0004 /* JiraService.swift */,
 				BB0013 /* Logger.swift */,
 				A6CBA4B82ED0395200528322 /* AudioRecorder.swift */,
@@ -138,6 +143,7 @@
 		FF0004 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				A6F144C42EE16E04006F5F2C /* MenuBarQuickCreateView.swift */,
 				A6BACF682ED7C013000A4D2B /* JQLBuilderView.swift */,
 				BB0005 /* FilterPanel.swift */,
 				BB0006 /* SprintInfoView.swift */,
@@ -241,6 +247,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				AA0001 /* ViewpointApp.swift in Sources */,
+				A6F144C52EE16E04006F5F2C /* MenuBarQuickCreateView.swift in Sources */,
 				AA0002 /* ContentView.swift in Sources */,
 				AA0003 /* JiraModels.swift in Sources */,
 				A6CBA4BD2ED0395F00528322 /* IndigoModels.swift in Sources */,
@@ -261,6 +268,7 @@
 				AA0011 /* Logger.swift in Sources */,
 				A6CBA4BA2ED0395200528322 /* WhisperService.swift in Sources */,
 				A6CBA4CA2ED03EF400528322 /* VertexAIClient.swift in Sources */,
+				A6F144C32EE16DF5006F5F2C /* MenuBarManager.swift in Sources */,
 				A6CBA4CB2ED03EF400528322 /* AIService.swift in Sources */,
 				A6BACF672ED7C002000A4D2B /* JQLAutocomplete.swift in Sources */,
 				A6CBA4BB2ED0395200528322 /* AudioRecorder.swift in Sources */,
