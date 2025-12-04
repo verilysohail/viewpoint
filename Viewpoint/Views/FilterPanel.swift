@@ -273,6 +273,15 @@ struct MultiSelectFilter: View {
     let options: [String]
     @Binding var selectedOptions: Set<String>
     @EnvironmentObject var jiraService: JiraService
+    @State private var searchText: String = ""
+
+    private var filteredOptions: [String] {
+        if searchText.isEmpty {
+            return options.sorted()
+        } else {
+            return options.filter { $0.lowercased().contains(searchText.lowercased()) }.sorted()
+        }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -282,7 +291,31 @@ struct MultiSelectFilter: View {
                     .foregroundColor(.secondary)
                     .padding(.vertical, 4)
             } else {
-                ForEach(options.sorted(), id: \.self) { option in
+                // Search field (only show if there are 5+ options)
+                if options.count >= 5 {
+                    HStack(spacing: 4) {
+                        Image(systemName: "magnifyingglass")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        TextField("Search...", text: $searchText)
+                            .textFieldStyle(.plain)
+                            .font(.caption)
+                        if !searchText.isEmpty {
+                            Button(action: { searchText = "" }) {
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(6)
+                    .background(Color(NSColor.controlBackgroundColor))
+                    .cornerRadius(4)
+                    .padding(.bottom, 4)
+                }
+
+                ForEach(filteredOptions, id: \.self) { option in
                     Toggle(isOn: Binding(
                         get: { selectedOptions.contains(option) },
                         set: { isSelected in
@@ -298,6 +331,13 @@ struct MultiSelectFilter: View {
                             .font(.caption)
                     }
                     .toggleStyle(.checkbox)
+                }
+
+                if !filteredOptions.isEmpty && filteredOptions.count < options.count {
+                    Text("Showing \(filteredOptions.count) of \(options.count)")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                        .padding(.top, 4)
                 }
             }
         }

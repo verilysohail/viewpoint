@@ -13,6 +13,7 @@ struct ContentView: View {
     @State private var showingLogWorkForSelected = false
     @State private var showingSaveViewDialog = false
     @State private var showingManageViewsSheet = false
+    @State private var showingCreateIssue = false
     @State private var newViewName = ""
     @AppStorage("colorScheme") private var colorSchemePreference: String = "auto"
     @State private var searchText: String = ""
@@ -325,6 +326,21 @@ struct ContentView: View {
                     Label("Views", systemImage: "rectangle.stack")
                 }
                 .help("Manage saved filter views")
+            }
+
+            ToolbarItem(id: "createIssue", placement: .automatic, showsByDefault: true) {
+                // Create new issue
+                Button(action: {
+                    showingCreateIssue = true
+                }) {
+                    Image(systemName: "plus.circle.fill")
+                }
+                .keyboardShortcut("n", modifiers: .command)
+                .help("Create new issue (⌘N)")
+                .popover(isPresented: $showingCreateIssue, arrowEdge: .bottom) {
+                    QuickCreateIssueView(isPresented: $showingCreateIssue)
+                        .environmentObject(jiraService)
+                }
             }
 
             ToolbarItem(id: "logWork", placement: .automatic, showsByDefault: true) {
@@ -1560,6 +1576,120 @@ enum CreatedFilter: String, CaseIterable, Identifiable {
 
 private struct TextSizeMultiplierKey: EnvironmentKey {
     static let defaultValue: Double = 1.0
+}
+
+// MARK: - Quick Create Issue View
+
+struct QuickCreateIssueView: View {
+    @Binding var isPresented: Bool
+    @EnvironmentObject var jiraService: JiraService
+
+    @AppStorage("defaultAssignee") private var defaultAssignee: String = ""
+    @AppStorage("defaultProject") private var defaultProject: String = ""
+    @AppStorage("defaultComponent") private var defaultComponent: String = ""
+    @AppStorage("defaultEpic") private var defaultEpic: String = ""
+
+    @State private var summary: String = ""
+    @State private var isCreating: Bool = false
+    @State private var errorMessage: String?
+    @FocusState private var isSummaryFocused: Bool
+
+    private var canCreate: Bool {
+        !summary.isEmpty && !defaultProject.isEmpty
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            TextField("Enter issue summary...", text: $summary)
+                .textFieldStyle(.roundedBorder)
+                .focused($isSummaryFocused)
+                .onSubmit {
+                    if canCreate {
+                        createIssue()
+                    }
+                }
+                .frame(width: 350)
+
+            if !defaultProject.isEmpty {
+                HStack(spacing: 4) {
+                    Image(systemName: "arrow.right")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                    Text("\(defaultProject)")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            } else {
+                HStack(spacing: 4) {
+                    Image(systemName: "exclamationmark.triangle")
+                        .font(.caption2)
+                        .foregroundColor(.orange)
+                    Text("No default project set")
+                        .font(.caption)
+                        .foregroundColor(.orange)
+                }
+            }
+
+            if let error = errorMessage {
+                HStack(spacing: 4) {
+                    Image(systemName: "xmark.circle")
+                        .font(.caption2)
+                        .foregroundColor(.red)
+                    Text(error)
+                        .font(.caption)
+                        .foregroundColor(.red)
+                }
+            }
+        }
+        .padding(12)
+        .onAppear {
+            isSummaryFocused = true
+        }
+    }
+
+    private func createIssue() {
+        guard canCreate else { return }
+
+        isCreating = true
+        errorMessage = nil
+
+        Task {
+            var fields: [String: Any] = [
+                "project": defaultProject,
+                "summary": summary,
+                "type": "Story" // Default to Story
+            ]
+
+            if !defaultAssignee.isEmpty {
+                fields["assignee"] = defaultAssignee
+            }
+
+            if !defaultComponent.isEmpty {
+                fields["components"] = [defaultComponent]
+            }
+
+            if !defaultEpic.isEmpty {
+                fields["epic"] = defaultEpic
+            }
+
+            let (success, issueKey) = await jiraService.createIssue(fields: fields)
+
+            await MainActor.run {
+                isCreating = false
+
+                if success {
+                    Logger.shared.info("Created issue: \(issueKey ?? "unknown")")
+                    // Refresh issues to show the new one
+                    Task {
+                        await jiraService.fetchMyIssues(updateAvailableOptions: false)
+                    }
+                    isPresented = false
+                } else {
+                    errorMessage = "Failed to create issue. Check logs for details."
+                }
+            }
+        }
+    }
 }
 
 extension EnvironmentValues {

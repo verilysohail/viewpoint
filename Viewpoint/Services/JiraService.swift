@@ -266,11 +266,15 @@ class JiraService: ObservableObject {
 
             Logger.shared.info("Successfully fetched \(allIssues.count) total issues")
 
+            // Capture values before MainActor to avoid Swift 6 concurrency issues
+            let finalIssues = allIssues
+            let finalNextToken = nextToken
+
             await MainActor.run {
-                self.issues = allIssues
-                self.totalIssuesAvailable = allIssues.count // Can't know total with token-based pagination
-                self.hasMoreIssues = nextToken != nil
-                self.currentPageToken = nextToken
+                self.issues = finalIssues
+                self.totalIssuesAvailable = finalIssues.count // Can't know total with token-based pagination
+                self.hasMoreIssues = finalNextToken != nil
+                self.currentPageToken = finalNextToken
                 if updateAvailableOptions {
                     self.updateAvailableFilters()
                 }
@@ -351,11 +355,15 @@ class JiraService: ObservableObject {
 
             Logger.shared.info("JQL search returned \(allIssues.count) issues")
 
+            // Capture values before MainActor to avoid Swift 6 concurrency issues
+            let finalIssues = allIssues
+            let finalNextToken = searchResponse.nextPageToken
+
             await MainActor.run {
-                self.issues = allIssues
-                self.totalIssuesAvailable = allIssues.count
-                self.hasMoreIssues = searchResponse.nextPageToken != nil
-                self.currentPageToken = searchResponse.nextPageToken
+                self.issues = finalIssues
+                self.totalIssuesAvailable = finalIssues.count
+                self.hasMoreIssues = finalNextToken != nil
+                self.currentPageToken = finalNextToken
                 self.updateAvailableFilters()
                 self.isLoading = false
                 self.errorMessage = nil
@@ -606,9 +614,12 @@ class JiraService: ObservableObject {
 
                 Logger.shared.info("Found \(projectNames.count) accessible projects")
 
+                // Capture values before MainActor to avoid Swift 6 concurrency issues
+                let finalNameToKey = nameToKey
+
                 await MainActor.run {
                     self.availableProjects = Set(projectNames)
-                    self.projectNameToKey = nameToKey
+                    self.projectNameToKey = finalNameToKey
                 }
             }
         } catch {

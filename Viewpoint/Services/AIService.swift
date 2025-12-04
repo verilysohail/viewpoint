@@ -319,37 +319,18 @@ class AIService {
         RESPOND NOW:
         """
 
-        // Make synchronous LLM call for field mapping
+        // Make LLM call for field mapping
         guard let client = client else {
             Logger.shared.error("AI client not configured for field validation")
             return (userFields, nil)
         }
 
-        let semaphore = DispatchSemaphore(value: 0)
-        var mappingResult: String?
-        var mappingError: Error?
-
         // Use the same client to make a mapping call
-        Task {
-            do {
-                let response = try await client.generateContent(prompt: prompt)
-                mappingResult = response
-                semaphore.signal()
-            } catch {
-                mappingError = error
-                semaphore.signal()
-            }
-        }
-
-        semaphore.wait()
-
-        if let error = mappingError {
+        let result: String
+        do {
+            result = try await client.generateContent(prompt: prompt)
+        } catch {
             Logger.shared.error("Field mapping LLM call failed: \(error)")
-            return (userFields, nil)
-        }
-
-        guard let result = mappingResult else {
-            Logger.shared.error("No result from field mapping LLM")
             return (userFields, nil)
         }
 
