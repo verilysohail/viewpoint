@@ -2,6 +2,53 @@
 
 All notable changes to Viewpoint will be documented in this file.
 
+## [2.0] - 2025-12-03
+
+🎉 **Official Release!** Viewpoint 2.0 is now production-ready.
+
+### What's New Since Beta 3
+
+**🚀 Menu Bar Quick Create**
+- Menu bar icon for instant issue creation from anywhere
+- Quick create panel with keyboard shortcuts (Enter to create, ESC to cancel)
+- Smart defaults using configured project, assignee, epic, and component
+- Success confirmation showing created issue key
+- Right-click menu for quick access to main window, settings, and quit
+- Toggle in Settings → General tab
+- App runs in background when windows closed
+
+**🎨 Enhanced Epic Filtering**
+- Converted to searchable popover-based picker for better UX
+- Multi-select support - select multiple epics simultaneously
+- Search by epic key or summary
+- Epic names and summaries persist after filtering
+- Shows epic summary + key for better identification
+
+**📋 Issue Detail Enhancements**
+- Automatic refresh after updates (sprint, epic, estimate, time logging)
+- No need to close and reopen windows
+- Seamless integration with all edit operations
+
+**💅 Visual Polish**
+- Thicker split view divider (10 points) in dark gray for better visibility
+- Improved contrast and readability
+- Better window management - windows stay visible when switching apps
+- Professional date-based build numbering (YYYYMMDD format)
+
+### Fixed
+- Epic multi-select filter persistence - options no longer vanish after selection
+- Epic summaries persistence - names remain visible after filtering
+- Window disappearing on app switch with Cmd+Tab
+- Filter panel search functionality for epic names and keys
+
+### Technical
+- Build number now uses date-based format (20251203) for instant identification
+- Removed .accessory activation policy that was hiding windows
+- Epic summaries and available epics now merge instead of replace
+- Enhanced epic search across all loaded issues
+
+---
+
 ## [2.0 Beta 3] - 2025-11-26
 
 ### Added
