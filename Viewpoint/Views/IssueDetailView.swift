@@ -556,24 +556,30 @@ struct IssueEpicSelector: View {
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundColor(.primary)
 
-            Menu {
-                // Search field at the top
-                HStack {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundColor(.secondary)
-                        .font(.system(size: 11))
-                    TextField("Search epics...", text: $searchText)
-                        .textFieldStyle(.plain)
+            // Search field OUTSIDE the menu
+            HStack(spacing: 6) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundColor(.secondary)
+                    .font(.system(size: 11))
+                TextField("Search epics...", text: $searchText)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 12))
+                if !searchText.isEmpty {
+                    Button(action: { searchText = "" }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(.secondary)
+                            .font(.system(size: 12))
+                    }
+                    .buttonStyle(.plain)
                 }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(Color(NSColor.controlBackgroundColor))
-                .cornerRadius(4)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(Color(NSColor.controlBackgroundColor))
+            .cornerRadius(6)
 
-                Divider()
-
+            // Dropdown menu
+            Menu {
                 Button("None") {
                     updateEpic(to: nil)
                 }
