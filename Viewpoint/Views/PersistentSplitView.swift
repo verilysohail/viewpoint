@@ -7,7 +7,7 @@ struct PersistentSplitView<Top: View, Bottom: View>: NSViewRepresentable {
     @Binding var position: Double
 
     func makeNSView(context: Context) -> NSSplitView {
-        let splitView = NSSplitView()
+        let splitView = CustomSplitView()
         splitView.isVertical = false
         splitView.dividerStyle = .paneSplitter
         splitView.delegate = context.coordinator
@@ -77,5 +77,17 @@ struct PersistentSplitView<Top: View, Bottom: View>: NSViewRepresentable {
             // Allow the bottom view to resize, keep top view fixed during window resize
             return view == splitView.subviews.last
         }
+    }
+}
+
+// MARK: - Custom Split View with Dark Gray Divider
+
+class CustomSplitView: NSSplitView {
+    override var dividerColor: NSColor {
+        return NSColor.darkGray
+    }
+
+    override var dividerThickness: CGFloat {
+        return 1.0
     }
 }

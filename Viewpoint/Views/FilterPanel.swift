@@ -403,6 +403,20 @@ struct SprintSelector: View {
 
 struct EpicSelector: View {
     @EnvironmentObject var jiraService: JiraService
+    @State private var searchText: String = ""
+
+    private var filteredEpics: [String] {
+        let epics = Array(jiraService.availableEpics).sorted()
+        if searchText.isEmpty {
+            return epics
+        } else {
+            return epics.filter { epicKey in
+                let summary = jiraService.epicSummaries[epicKey] ?? ""
+                return epicKey.lowercased().contains(searchText.lowercased()) ||
+                       summary.lowercased().contains(searchText.lowercased())
+            }
+        }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -412,7 +426,31 @@ struct EpicSelector: View {
                     .foregroundColor(.secondary)
                     .padding(.vertical, 4)
             } else {
-                ForEach(Array(jiraService.availableEpics).sorted(), id: \.self) { epicKey in
+                // Search field (only show if there are 5+ epics)
+                if jiraService.availableEpics.count >= 5 {
+                    HStack(spacing: 4) {
+                        Image(systemName: "magnifyingglass")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        TextField("Search...", text: $searchText)
+                            .textFieldStyle(.plain)
+                            .font(.caption)
+                        if !searchText.isEmpty {
+                            Button(action: { searchText = "" }) {
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(6)
+                    .background(Color(NSColor.controlBackgroundColor))
+                    .cornerRadius(4)
+                    .padding(.bottom, 4)
+                }
+
+                ForEach(filteredEpics, id: \.self) { epicKey in
                     Toggle(isOn: Binding(
                         get: { jiraService.filters.epics.contains(epicKey) },
                         set: { isSelected in
@@ -439,6 +477,13 @@ struct EpicSelector: View {
                         }
                     }
                     .toggleStyle(.checkbox)
+                }
+
+                if !filteredEpics.isEmpty && filteredEpics.count < jiraService.availableEpics.count {
+                    Text("Showing \(filteredEpics.count) of \(jiraService.availableEpics.count)")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                        .padding(.top, 4)
                 }
             }
         }
