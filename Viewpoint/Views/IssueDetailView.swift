@@ -72,7 +72,10 @@ struct IssueDetailView: View {
     let issueDetails: IssueDetails
     @EnvironmentObject var jiraService: JiraService
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.refreshIssueDetails) var refreshIssueDetails
     @State private var selectedTab = 0
+    @State private var newCommentText = ""
+    @State private var isSubmittingComment = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -249,26 +252,74 @@ struct IssueDetailView: View {
     }
 
     private var commentsTab: some View {
-        ScrollView {
-            if issueDetails.comments.isEmpty {
-                VStack(spacing: 12) {
-                    Image(systemName: "bubble.left.and.bubble.right")
-                        .font(.system(size: 48))
-                        .foregroundColor(.secondary)
-                    Text("No comments yet")
-                        .font(.headline)
-                        .foregroundColor(.secondary)
+        VStack(spacing: 0) {
+            ScrollView {
+                if issueDetails.comments.isEmpty {
+                    VStack(spacing: 12) {
+                        Image(systemName: "bubble.left.and.bubble.right")
+                            .font(.system(size: 48))
+                            .foregroundColor(.secondary)
+                        Text("No comments yet")
+                            .font(.headline)
+                            .foregroundColor(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .padding(60)
+                } else {
+                    LazyVStack(alignment: .leading, spacing: 16) {
+                        ForEach(issueDetails.comments) { comment in
+                            CommentView(comment: comment)
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.top, 12)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .padding(60)
-            } else {
-                LazyVStack(alignment: .leading, spacing: 16) {
-                    ForEach(issueDetails.comments) { comment in
-                        CommentView(comment: comment)
+            }
+
+            Divider()
+
+            // Add comment input
+            HStack(spacing: 8) {
+                TextField("Add a comment...", text: $newCommentText, axis: .vertical)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 13))
+                    .lineLimit(1...5)
+                    .padding(10)
+                    .background(Color(NSColor.controlBackgroundColor))
+                    .cornerRadius(8)
+                    .disabled(isSubmittingComment)
+
+                Button(action: submitComment) {
+                    if isSubmittingComment {
+                        ProgressView()
+                            .scaleEffect(0.7)
+                            .frame(width: 16, height: 16)
+                    } else {
+                        Image(systemName: "paperplane.fill")
                     }
                 }
-                .padding(.horizontal, 12)
-                .padding(.top, 12)
+                .buttonStyle(.borderedProminent)
+                .disabled(newCommentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSubmittingComment)
+            }
+            .padding(12)
+        }
+    }
+
+    private func submitComment() {
+        let commentText = newCommentText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !commentText.isEmpty else { return }
+
+        isSubmittingComment = true
+
+        Task {
+            let success = await jiraService.addComment(issueKey: issueDetails.issue.key, comment: commentText)
+
+            await MainActor.run {
+                isSubmittingComment = false
+                if success {
+                    newCommentText = ""
+                    refreshIssueDetails()
+                }
             }
         }
     }
