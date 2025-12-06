@@ -1478,7 +1478,7 @@ class JiraService: ObservableObject {
         }
     }
 
-    func addComment(issueKey: String, comment: String) async -> Bool {
+    func addComment(issueKey: String, comment: String, parentId: String? = nil) async -> Bool {
         let urlString = "\(config.jiraBaseURL)/rest/api/3/issue/\(issueKey)/comment"
 
         guard let url = URL(string: urlString) else {
@@ -1489,7 +1489,7 @@ class JiraService: ObservableObject {
         var request = createRequest(url: url)
         request.httpMethod = "POST"
 
-        let requestBody: [String: Any] = [
+        var requestBody: [String: Any] = [
             "body": [
                 "type": "doc",
                 "version": 1,
@@ -1507,10 +1507,15 @@ class JiraService: ObservableObject {
             ]
         ]
 
+        // Add parentId for threaded replies
+        if let parentId = parentId {
+            requestBody["parentId"] = parentId
+        }
+
         do {
             request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
 
-            Logger.shared.info("Adding comment to \(issueKey)")
+            Logger.shared.info("Adding comment to \(issueKey)\(parentId != nil ? " (reply to \(parentId!))" : "")")
 
             let (data, response) = try await URLSession.shared.data(for: request)
 
@@ -1806,7 +1811,7 @@ class JiraService: ObservableObject {
     }
 
     func fetchComments(issueKey: String) async -> (success: Bool, comments: [IssueComment]?) {
-        let urlString = "\(config.jiraBaseURL)/rest/api/3/issue/\(issueKey)/comment"
+        let urlString = "\(config.jiraBaseURL)/rest/api/3/issue/\(issueKey)/comment?expand=properties"
 
         guard let url = URL(string: urlString) else {
             Logger.shared.error("Invalid URL for fetching comments")
@@ -1840,11 +1845,21 @@ class JiraService: ObservableObject {
                             // Extract plain text from ADF (Atlassian Document Format)
                             let bodyText = extractTextFromADF(body)
 
+                            // Get parentId for threaded comments (optional field)
+                            // parentId can be String or Int depending on Jira version
+                            var parentId: String? = nil
+                            if let parentIdStr = commentDict["parentId"] as? String {
+                                parentId = parentIdStr
+                            } else if let parentIdInt = commentDict["parentId"] as? Int {
+                                parentId = String(parentIdInt)
+                            }
+
                             let comment = IssueComment(
                                 id: id,
                                 author: authorName,
                                 created: created,
-                                body: bodyText
+                                body: bodyText,
+                                parentId: parentId
                             )
                             comments.append(comment)
                         }

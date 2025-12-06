@@ -251,6 +251,24 @@ struct IssueDetailView: View {
         }
     }
 
+    // Group comments into threads (parent comments with their replies)
+    private var threadedComments: [(parent: IssueComment, replies: [IssueComment])] {
+        let parentComments = issueDetails.comments.filter { $0.parentId == nil }
+        let replyComments = issueDetails.comments.filter { $0.parentId != nil }
+
+        // Create a lookup of replies by parentId
+        var repliesByParent: [String: [IssueComment]] = [:]
+        for reply in replyComments {
+            if let parentId = reply.parentId {
+                repliesByParent[parentId, default: []].append(reply)
+            }
+        }
+
+        return parentComments.map { parent in
+            (parent: parent, replies: repliesByParent[parent.id] ?? [])
+        }
+    }
+
     private var commentsTab: some View {
         VStack(spacing: 0) {
             ScrollView {
@@ -267,8 +285,18 @@ struct IssueDetailView: View {
                     .padding(60)
                 } else {
                     LazyVStack(alignment: .leading, spacing: 16) {
-                        ForEach(issueDetails.comments) { comment in
-                            CommentView(comment: comment)
+                        ForEach(threadedComments, id: \.parent.id) { thread in
+                            VStack(alignment: .leading, spacing: 4) {
+                                // Parent comment with reply callback
+                                CommentView(comment: thread.parent, onReply: { replyText in
+                                    submitReply(to: thread.parent.id, text: replyText)
+                                })
+
+                                // Replies indented under parent
+                                ForEach(thread.replies) { reply in
+                                    CommentView(comment: reply, isReply: true)
+                                }
+                            }
                         }
                     }
                     .padding(.horizontal, 12)
@@ -318,6 +346,22 @@ struct IssueDetailView: View {
                 isSubmittingComment = false
                 if success {
                     newCommentText = ""
+                    refreshIssueDetails()
+                }
+            }
+        }
+    }
+
+    private func submitReply(to parentId: String, text: String) {
+        Task {
+            let success = await jiraService.addComment(
+                issueKey: issueDetails.issue.key,
+                comment: text,
+                parentId: parentId
+            )
+
+            await MainActor.run {
+                if success {
                     refreshIssueDetails()
                 }
             }
@@ -418,41 +462,115 @@ struct DetailSection<Content: View>: View {
 
 struct CommentView: View {
     let comment: IssueComment
+    var isReply: Bool = false
+    var onReply: ((String) -> Void)? = nil
+
+    @State private var isReplying = false
+    @State private var replyText = ""
+    @State private var isSubmitting = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Image(systemName: "person.circle.fill")
-                    .font(.system(size: 16))
-                    .foregroundColor(.blue)
-
-                Text(comment.author)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(.primary)
-
-                Text(formatDate(comment.created))
-                    .font(.system(size: 11))
-                    .foregroundColor(.secondary)
-
-                Spacer()
+        HStack(alignment: .top, spacing: 0) {
+            // Indentation and thread line for replies
+            if isReply {
+                VStack {
+                    Rectangle()
+                        .fill(Color.blue.opacity(0.3))
+                        .frame(width: 2)
+                }
+                .frame(width: 24)
+                .padding(.leading, 8)
             }
 
-            Text(comment.body)
-                .font(.system(size: 12))
-                .foregroundColor(.primary)
-                .textSelection(.enabled)
-                .padding(12)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color(NSColor.controlBackgroundColor).opacity(0.3))
-                .cornerRadius(8)
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Image(systemName: isReply ? "arrowshape.turn.up.left.fill" : "person.circle.fill")
+                        .font(.system(size: isReply ? 12 : 16))
+                        .foregroundColor(isReply ? .secondary : .blue)
+
+                    Text(comment.author)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.primary)
+
+                    Text(formatDate(comment.created))
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+
+                    Spacer()
+
+                    // Reply button (only show for parent comments, not replies)
+                    if !isReply && onReply != nil {
+                        Button(action: { isReplying.toggle() }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "arrowshape.turn.up.left")
+                                    .font(.system(size: 11))
+                                Text("Reply")
+                                    .font(.system(size: 11))
+                            }
+                            .foregroundColor(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .opacity(isReplying ? 0 : 1)
+                    }
+                }
+
+                Text(comment.body)
+                    .font(.system(size: 12))
+                    .foregroundColor(.primary)
+                    .textSelection(.enabled)
+                    .padding(12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color(NSColor.controlBackgroundColor).opacity(isReply ? 0.2 : 0.3))
+                    .cornerRadius(8)
+
+                // Inline reply input
+                if isReplying {
+                    HStack(spacing: 8) {
+                        TextField("Write a reply...", text: $replyText, axis: .vertical)
+                            .textFieldStyle(.plain)
+                            .font(.system(size: 12))
+                            .lineLimit(1...4)
+                            .padding(8)
+                            .background(Color(NSColor.controlBackgroundColor))
+                            .cornerRadius(6)
+                            .disabled(isSubmitting)
+
+                        Button(action: submitReply) {
+                            if isSubmitting {
+                                ProgressView()
+                                    .scaleEffect(0.6)
+                                    .frame(width: 14, height: 14)
+                            } else {
+                                Image(systemName: "paperplane.fill")
+                                    .font(.system(size: 12))
+                            }
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
+                        .disabled(replyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSubmitting)
+
+                        Button(action: {
+                            isReplying = false
+                            replyText = ""
+                        }) {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 10))
+                                .foregroundColor(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(isSubmitting)
+                    }
+                    .padding(.top, 4)
+                }
+            }
+            .padding(12)
+            .background(Color(NSColor.windowBackgroundColor).opacity(isReply ? 0.5 : 1.0))
+            .cornerRadius(8)
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(Color.gray.opacity(isReply ? 0.1 : 0.2), lineWidth: 1)
+            )
         }
-        .padding(12)
-        .background(Color(NSColor.windowBackgroundColor))
-        .cornerRadius(8)
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(Color.gray.opacity(0.2), lineWidth: 1)
-        )
     }
 
     private func formatDate(_ isoString: String) -> String {
@@ -467,6 +585,21 @@ struct CommentView: View {
         displayFormatter.dateStyle = .medium
         displayFormatter.timeStyle = .short
         return displayFormatter.string(from: date)
+    }
+
+    private func submitReply() {
+        let text = replyText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty, let onReply = onReply else { return }
+
+        isSubmitting = true
+        onReply(text)
+
+        // Reset state after callback (the parent will handle refresh)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            isSubmitting = false
+            isReplying = false
+            replyText = ""
+        }
     }
 }
 

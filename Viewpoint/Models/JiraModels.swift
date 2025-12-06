@@ -418,4 +418,5 @@ struct IssueComment: Identifiable {
     let author: String
     let created: String
     let body: String
+    let parentId: String?
 }
