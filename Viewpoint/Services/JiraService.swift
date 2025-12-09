@@ -190,7 +190,13 @@ class JiraService: ObservableObject {
     func loadMoreIssues(updateAvailableOptions: Bool = false, initialFetchLimit: Int = 500) async {
         await MainActor.run { isLoading = true }
 
-        let jql = filters.buildJQL(userEmail: config.jiraEmail)
+        // Use currentJQL if available (from direct JQL search), otherwise build from filters
+        let jql = await MainActor.run {
+            if let current = currentJQL, !current.isEmpty {
+                return current
+            }
+            return filters.buildJQL(userEmail: config.jiraEmail)
+        }
 
         let maxResults = 100
         let isInitialFetch = await MainActor.run { currentPageToken == nil && issues.isEmpty }
@@ -404,9 +410,14 @@ class JiraService: ObservableObject {
         }
 
         // Parse status filter: status IN ("Done", "In Progress")
-        if let statuses = parseJQLList(jql: jql, field: "status") {
-            filters.statuses = Set(statuses)
-            Logger.shared.info("Parsed statuses: \(statuses)")
+        // Note: We skip parsing status if it uses != or NOT IN operators since filters don't support negation
+        if !lowercaseJQL.contains("status !=") && !lowercaseJQL.contains("status not in") {
+            if let statuses = parseJQLList(jql: jql, field: "status") {
+                filters.statuses = Set(statuses)
+                Logger.shared.info("Parsed statuses: \(statuses)")
+            }
+        } else {
+            Logger.shared.info("Skipping status filter parsing - JQL uses negation (!=, NOT IN) which filters don't support")
         }
 
         // Parse assignee filter: assignee IN ("User1", "User2") or assignee = currentUser()
@@ -1127,6 +1138,46 @@ class JiraService: ObservableObject {
         }
     }
 
+    func searchUsers(query: String) async -> [(displayName: String, accountId: String, email: String)] {
+        // Use Jira's user search API to find users by name
+        let encodedQuery = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? query
+        let urlString = "\(config.jiraBaseURL)/rest/api/3/user/search?query=\(encodedQuery)&maxResults=10"
+
+        guard let url = URL(string: urlString) else {
+            Logger.shared.error("Invalid URL for user search")
+            return []
+        }
+
+        let request = createRequest(url: url)
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw URLError(.badServerResponse)
+            }
+
+            if httpResponse.statusCode == 200,
+               let usersArray = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
+
+                let users = usersArray.compactMap { userDict -> (String, String, String)? in
+                    guard let displayName = userDict["displayName"] as? String,
+                          let accountId = userDict["accountId"] as? String else {
+                        return nil
+                    }
+                    let email = userDict["emailAddress"] as? String ?? ""
+                    return (displayName, accountId, email)
+                }
+
+                return users
+            }
+        } catch {
+            Logger.shared.error("Failed to search users: \(error)")
+        }
+
+        return []
+    }
+
     func fetchJQLAutocompleteSuggestions(fieldName: String, query: String = "") async -> [String] {
         // Use Jira's autocomplete API to get all available values for a field
         let encodedQuery = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? query
@@ -1489,6 +1540,9 @@ class JiraService: ObservableObject {
         var request = createRequest(url: url)
         request.httpMethod = "POST"
 
+        // Parse comment text and convert mentions to ADF format
+        let paragraphContent = await parseCommentWithMentions(comment)
+
         var requestBody: [String: Any] = [
             "body": [
                 "type": "doc",
@@ -1496,12 +1550,7 @@ class JiraService: ObservableObject {
                 "content": [
                     [
                         "type": "paragraph",
-                        "content": [
-                            [
-                                "type": "text",
-                                "text": comment
-                            ]
-                        ]
+                        "content": paragraphContent
                     ]
                 ]
             ]
@@ -1514,6 +1563,11 @@ class JiraService: ObservableObject {
 
         do {
             request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
+
+            // Log the request body for debugging
+            if let jsonString = String(data: request.httpBody!, encoding: .utf8) {
+                Logger.shared.info("Comment request body: \(jsonString)")
+            }
 
             Logger.shared.info("Adding comment to \(issueKey)\(parentId != nil ? " (reply to \(parentId!))" : "")")
 
@@ -1881,6 +1935,83 @@ class JiraService: ObservableObject {
         }
     }
 
+    private func parseCommentWithMentions(_ comment: String) async -> [[String: Any]] {
+        Logger.shared.info("Parsing comment for mentions: \(comment)")
+        var content: [[String: Any]] = []
+        var currentText = ""
+        var i = comment.startIndex
+
+        while i < comment.endIndex {
+            if comment[i] == "@" {
+                // Save any accumulated text before the mention
+                if !currentText.isEmpty {
+                    content.append([
+                        "type": "text",
+                        "text": currentText
+                    ])
+                    currentText = ""
+                }
+
+                // Extract potential mention text - try progressively longer strings
+                // Start with everything until the next @ or end of string
+                var searchEnd = comment.index(after: i)
+                while searchEnd < comment.endIndex && comment[searchEnd] != "@" {
+                    searchEnd = comment.index(after: searchEnd)
+                }
+
+                let potentialMentionArea = String(comment[comment.index(after: i)..<searchEnd])
+
+                // Try to find the longest matching user name starting from @
+                var bestMatch: (displayName: String, accountId: String, endIndex: String.Index)?
+
+                // Search for users with the first word(s) after @
+                let words = potentialMentionArea.components(separatedBy: CharacterSet.whitespacesAndNewlines)
+                for wordCount in (1...min(words.count, 5)).reversed() {
+                    let candidateName = words.prefix(wordCount).joined(separator: " ")
+                    Logger.shared.info("Trying to match: '\(candidateName)'")
+
+                    let users = await searchUsers(query: candidateName)
+                    if let user = users.first(where: { $0.displayName.lowercased() == candidateName.lowercased() }) {
+                        let mentionEnd = comment.index(i, offsetBy: candidateName.count + 1)
+                        bestMatch = (user.displayName, user.accountId, mentionEnd)
+                        Logger.shared.info("Found match: \(user.displayName) (accountId: \(user.accountId))")
+                        break
+                    }
+                }
+
+                if let match = bestMatch {
+                    // Add proper mention node
+                    content.append([
+                        "type": "mention",
+                        "attrs": [
+                            "id": match.accountId,
+                            "text": "@\(match.displayName)"
+                        ]
+                    ])
+                    i = match.endIndex
+                } else {
+                    // No match found - just include @ and continue
+                    Logger.shared.warning("No match found for mentions starting at @")
+                    currentText.append("@")
+                    i = comment.index(after: i)
+                }
+            } else {
+                currentText.append(comment[i])
+                i = comment.index(after: i)
+            }
+        }
+
+        // Add any remaining text
+        if !currentText.isEmpty {
+            content.append([
+                "type": "text",
+                "text": currentText
+            ])
+        }
+
+        return content.isEmpty ? [["type": "text", "text": comment]] : content
+    }
+
     private func extractTextFromADF(_ adf: [String: Any]) -> String {
         guard let content = adf["content"] as? [[String: Any]] else {
             return ""
@@ -1892,8 +2023,14 @@ class JiraService: ObservableObject {
                 if nodeType == "paragraph" {
                     if let paragraphContent = node["content"] as? [[String: Any]] {
                         for textNode in paragraphContent {
-                            if let nodeText = textNode["text"] as? String {
+                            let type = textNode["type"] as? String
+                            if type == "text", let nodeText = textNode["text"] as? String {
                                 text += nodeText
+                            } else if type == "mention",
+                                      let attrs = textNode["attrs"] as? [String: Any],
+                                      let mentionText = attrs["text"] as? String {
+                                // Render mentions with their display text
+                                text += mentionText
                             }
                         }
                     }

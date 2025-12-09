@@ -288,13 +288,13 @@ struct IssueDetailView: View {
                         ForEach(threadedComments, id: \.parent.id) { thread in
                             VStack(alignment: .leading, spacing: 4) {
                                 // Parent comment with reply callback
-                                CommentView(comment: thread.parent, onReply: { replyText in
+                                CommentView(comment: thread.parent, jiraService: jiraService, onReply: { replyText in
                                     submitReply(to: thread.parent.id, text: replyText)
                                 })
 
                                 // Replies indented under parent
                                 ForEach(thread.replies) { reply in
-                                    CommentView(comment: reply, isReply: true)
+                                    CommentView(comment: reply, jiraService: jiraService, isReply: true)
                                 }
                             }
                         }
@@ -307,15 +307,13 @@ struct IssueDetailView: View {
             Divider()
 
             // Add comment input
-            HStack(spacing: 8) {
-                TextField("Add a comment...", text: $newCommentText, axis: .vertical)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 13))
-                    .lineLimit(1...5)
-                    .padding(10)
-                    .background(Color(NSColor.controlBackgroundColor))
-                    .cornerRadius(8)
-                    .disabled(isSubmittingComment)
+            HStack(alignment: .bottom, spacing: 8) {
+                MentionTextField(
+                    placeholder: "Add a comment...",
+                    text: $newCommentText,
+                    jiraService: jiraService,
+                    onSubmit: submitComment
+                )
 
                 Button(action: submitComment) {
                     if isSubmittingComment {
@@ -462,6 +460,7 @@ struct DetailSection<Content: View>: View {
 
 struct CommentView: View {
     let comment: IssueComment
+    let jiraService: JiraService
     var isReply: Bool = false
     var onReply: ((String) -> Void)? = nil
 
@@ -525,15 +524,13 @@ struct CommentView: View {
 
                 // Inline reply input
                 if isReplying {
-                    HStack(spacing: 8) {
-                        TextField("Write a reply...", text: $replyText, axis: .vertical)
-                            .textFieldStyle(.plain)
-                            .font(.system(size: 12))
-                            .lineLimit(1...4)
-                            .padding(8)
-                            .background(Color(NSColor.controlBackgroundColor))
-                            .cornerRadius(6)
-                            .disabled(isSubmitting)
+                    HStack(alignment: .bottom, spacing: 8) {
+                        MentionTextField(
+                            placeholder: "Write a reply...",
+                            text: $replyText,
+                            jiraService: jiraService,
+                            onSubmit: submitReply
+                        )
 
                         Button(action: submitReply) {
                             if isSubmitting {

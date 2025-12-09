@@ -1,13 +1,16 @@
 import SwiftUI
 import AppKit
 
-class MenuBarManager: ObservableObject {
+class MenuBarManager: NSObject, ObservableObject {
     private var statusItem: NSStatusItem?
     private var popover: NSPopover?
     private let jiraService: JiraService
+    private var eventMonitor: Any?
+    private var viewModel: MenuBarQuickCreateViewModel?
 
     init(jiraService: JiraService) {
         self.jiraService = jiraService
+        super.init()
     }
 
     func setupMenuBar() {
@@ -37,23 +40,65 @@ class MenuBarManager: ObservableObject {
             Logger.shared.error("MenuBarManager: Failed to get status item button")
         }
 
+        // Create view model
+        viewModel = MenuBarQuickCreateViewModel(jiraService: jiraService, dismissAction: {
+            self.popover?.close()
+            self.stopMonitoringKeyEvents()
+        })
+
         // Create popover
         popover = NSPopover()
         popover?.contentSize = NSSize(width: 320, height: 120)
         popover?.behavior = .transient
         popover?.contentViewController = NSHostingController(
-            rootView: MenuBarQuickCreateView(jiraService: jiraService, dismissAction: {
-                self.popover?.close()
-            })
+            rootView: MenuBarQuickCreateView(viewModel: viewModel!)
         )
+
+        // Add delegate to handle popover lifecycle
+        popover?.delegate = self
     }
 
     func removeMenuBar() {
+        stopMonitoringKeyEvents()
         if let statusItem = statusItem {
             NSStatusBar.system.removeStatusItem(statusItem)
         }
         statusItem = nil
         popover = nil
+    }
+
+    private func startMonitoringKeyEvents() {
+        // Remove existing monitor if any
+        stopMonitoringKeyEvents()
+
+        // Monitor local key events in the popover
+        eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self = self,
+                  let popover = self.popover,
+                  popover.isShown else {
+                return event
+            }
+
+            // Check if Enter/Return was pressed
+            if event.keyCode == 36 || event.keyCode == 76 { // 36 = Return, 76 = Enter
+                // Directly trigger the create issue action
+                if let vm = self.viewModel {
+                    Task { @MainActor in
+                        vm.createIssue()
+                    }
+                }
+                return nil // Consume the event
+            }
+
+            return event
+        }
+    }
+
+    private func stopMonitoringKeyEvents() {
+        if let monitor = eventMonitor {
+            NSEvent.removeMonitor(monitor)
+            eventMonitor = nil
+        }
     }
 
     @objc private func togglePopover() {
@@ -71,8 +116,14 @@ class MenuBarManager: ObservableObject {
                     popover.close()
                 } else {
                     popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
-                    // Focus the popover
-                    popover.contentViewController?.view.window?.makeKey()
+                    // Focus the popover and make it the first responder
+                    DispatchQueue.main.async {
+                        if let popoverWindow = popover.contentViewController?.view.window {
+                            popoverWindow.makeKey()
+                            popoverWindow.makeFirstResponder(popover.contentViewController?.view)
+                        }
+                        self.startMonitoringKeyEvents()
+                    }
                 }
             }
         }
@@ -101,7 +152,14 @@ class MenuBarManager: ObservableObject {
     @objc private func showQuickCreate() {
         guard let button = statusItem?.button else { return }
         popover?.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
-        popover?.contentViewController?.view.window?.makeKey()
+        // Focus the popover and make it the first responder
+        DispatchQueue.main.async {
+            if let popoverWindow = self.popover?.contentViewController?.view.window {
+                popoverWindow.makeKey()
+                popoverWindow.makeFirstResponder(self.popover?.contentViewController?.view)
+            }
+            self.startMonitoringKeyEvents()
+        }
     }
 
     @objc private func showMainWindow() {
@@ -117,5 +175,12 @@ class MenuBarManager: ObservableObject {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
         NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+    }
+}
+
+// MARK: - NSPopoverDelegate
+extension MenuBarManager: NSPopoverDelegate {
+    func popoverDidClose(_ notification: Notification) {
+        stopMonitoringKeyEvents()
     }
 }

@@ -281,7 +281,9 @@ struct ContentView: View {
                         showOnlyMyIssues: jiraService.filters.showOnlyMyIssues
                     )
 
-                    if viewsManager.addView(name: name, filters: currentFilters) {
+                    // Pass currentJQL if it exists, so views created from JQL searches preserve the original query
+                    let jql = (jiraService.currentJQL?.isEmpty == false) ? jiraService.currentJQL : nil
+                    if viewsManager.addView(name: name, filters: currentFilters, jql: jql) {
                         showingSaveViewDialog = false
                     }
                 }

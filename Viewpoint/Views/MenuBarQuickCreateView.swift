@@ -1,119 +1,29 @@
 import SwiftUI
 
-struct MenuBarQuickCreateView: View {
+class MenuBarQuickCreateViewModel: ObservableObject {
+    @Published var summary: String = ""
+    @Published var isCreating: Bool = false
+    @Published var errorMessage: String?
+    @Published var successMessage: String?
+
     let jiraService: JiraService
     let dismissAction: () -> Void
 
-    @AppStorage("defaultAssignee") private var defaultAssignee: String = ""
-    @AppStorage("defaultProject") private var defaultProject: String = ""
-    @AppStorage("defaultComponent") private var defaultComponent: String = ""
-    @AppStorage("defaultEpic") private var defaultEpic: String = ""
+    @AppStorage("defaultAssignee") var defaultAssignee: String = ""
+    @AppStorage("defaultProject") var defaultProject: String = ""
+    @AppStorage("defaultComponent") var defaultComponent: String = ""
+    @AppStorage("defaultEpic") var defaultEpic: String = ""
 
-    @State private var summary: String = ""
-    @State private var isCreating: Bool = false
-    @State private var errorMessage: String?
-    @State private var successMessage: String?
-    @FocusState private var isSummaryFocused: Bool
-
-    private var canCreate: Bool {
+    var canCreate: Bool {
         !summary.isEmpty && !defaultProject.isEmpty
     }
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            // Header
-            HStack {
-                Image(systemName: "plus.circle.fill")
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [.blue, .green],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .font(.system(size: 16))
-                Text("Quick Create Issue")
-                    .font(.headline)
-                Spacer()
-            }
-            .padding(.bottom, 4)
-
-            // Text field
-            TextField("Enter issue summary...", text: $summary)
-                .textFieldStyle(.roundedBorder)
-                .focused($isSummaryFocused)
-                .onSubmit {
-                    if canCreate {
-                        createIssue()
-                    }
-                }
-                .onExitCommand {
-                    dismissAction()
-                }
-
-            // Project info or error
-            if !defaultProject.isEmpty {
-                HStack(spacing: 4) {
-                    Image(systemName: "arrow.right")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                    Text(defaultProject)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-            } else {
-                HStack(spacing: 4) {
-                    Image(systemName: "exclamationmark.triangle")
-                        .font(.caption2)
-                        .foregroundColor(.orange)
-                    Text("No default project set")
-                        .font(.caption)
-                        .foregroundColor(.orange)
-                }
-            }
-
-            if let error = errorMessage {
-                HStack(spacing: 4) {
-                    Image(systemName: "xmark.circle")
-                        .font(.caption2)
-                        .foregroundColor(.red)
-                    Text(error)
-                        .font(.caption)
-                        .foregroundColor(.red)
-                }
-            }
-
-            if let success = successMessage {
-                HStack(spacing: 4) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.caption2)
-                        .foregroundColor(.green)
-                    Text(success)
-                        .font(.caption)
-                        .foregroundColor(.green)
-                }
-            }
-
-            // Creating indicator
-            if isCreating {
-                HStack(spacing: 6) {
-                    ProgressView()
-                        .scaleEffect(0.7)
-                        .frame(width: 16, height: 16)
-                    Text("Creating...")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-            }
-        }
-        .padding(12)
-        .frame(width: 320)
-        .onAppear {
-            isSummaryFocused = true
-        }
+    init(jiraService: JiraService, dismissAction: @escaping () -> Void) {
+        self.jiraService = jiraService
+        self.dismissAction = dismissAction
     }
 
-    private func createIssue() {
+    func createIssue() {
         guard canCreate else { return }
 
         isCreating = true
@@ -155,15 +65,120 @@ struct MenuBarQuickCreateView: View {
                         await jiraService.fetchMyIssues(updateAvailableOptions: false)
                     }
                     // Close the popover after showing success
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-                        successMessage = nil
-                        dismissAction()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
+                        self?.successMessage = nil
+                        self?.dismissAction()
                     }
                 } else {
                     errorMessage = "Failed to create issue"
                     successMessage = nil
                 }
             }
+        }
+    }
+}
+
+struct MenuBarQuickCreateView: View {
+    @ObservedObject var viewModel: MenuBarQuickCreateViewModel
+    @FocusState private var isSummaryFocused: Bool
+
+    init(viewModel: MenuBarQuickCreateViewModel) {
+        self.viewModel = viewModel
+    }
+
+    var defaultProject: String {
+        viewModel.defaultProject
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            // Header
+            HStack {
+                Image(systemName: "plus.circle.fill")
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [.blue, .green],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .font(.system(size: 16))
+                Text("Quick Create Issue")
+                    .font(.headline)
+                Spacer()
+            }
+            .padding(.bottom, 4)
+
+            // Text field
+            TextField("Enter issue summary...", text: $viewModel.summary)
+                .textFieldStyle(.roundedBorder)
+                .focused($isSummaryFocused)
+                .onSubmit {
+                    viewModel.createIssue()
+                }
+                .onExitCommand {
+                    viewModel.dismissAction()
+                }
+
+            // Project info or error
+            if !viewModel.defaultProject.isEmpty {
+                HStack(spacing: 4) {
+                    Image(systemName: "arrow.right")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                    Text(viewModel.defaultProject)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            } else {
+                HStack(spacing: 4) {
+                    Image(systemName: "exclamationmark.triangle")
+                        .font(.caption2)
+                        .foregroundColor(.orange)
+                    Text("No default project set")
+                        .font(.caption)
+                        .foregroundColor(.orange)
+                }
+            }
+
+            if let error = viewModel.errorMessage {
+                HStack(spacing: 4) {
+                    Image(systemName: "xmark.circle")
+                        .font(.caption2)
+                        .foregroundColor(.red)
+                    Text(error)
+                        .font(.caption)
+                        .foregroundColor(.red)
+                }
+            }
+
+            if let success = viewModel.successMessage {
+                HStack(spacing: 4) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.caption2)
+                        .foregroundColor(.green)
+                    Text(success)
+                        .font(.caption)
+                        .foregroundColor(.green)
+                }
+            }
+
+            // Creating indicator
+            if viewModel.isCreating {
+                HStack(spacing: 6) {
+                    ProgressView()
+                        .scaleEffect(0.7)
+                        .frame(width: 16, height: 16)
+                    Text("Creating...")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+        }
+        .padding(12)
+        .frame(width: 320)
+        .onAppear {
+            isSummaryFocused = true
         }
     }
 }
