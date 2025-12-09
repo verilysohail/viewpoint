@@ -49,6 +49,10 @@ struct IndigoView: View {
                 openWindow(value: issueKey)
             }
         }
+        .onAppear {
+            // Apply initial window floating state
+            viewModel.setWindowFloating(viewModel.keepOnTop)
+        }
     }
 
     private var headerView: some View {

@@ -82,6 +82,7 @@ struct AIContext {
     let availableSprints: [JiraSprint]
     let availableEpics: [String]
     let availableStatuses: [String]
+    let availableResolutions: [String]
     let lastSearchResults: [JiraIssue]?
     let lastCreatedIssue: String?
 }
@@ -107,6 +108,7 @@ struct AIResponse {
         case linkIssues(issueKey: String, linkedIssue: String, linkType: String)
         case fetchChangelog(issueKey: String)
         case showIssueDetail(issueKey: String)
+        case getTransitions(issueKey: String)
     }
 
     var estimatedCost: Double {

@@ -9,6 +9,7 @@ struct JiraIssue: Codable, Identifiable, Hashable {
 
     var summary: String { fields.summary }
     var status: String { fields.status.name }
+    var resolution: String? { fields.resolution?.name }
     var assignee: String? { fields.assignee?.displayName }
     var issueType: String { fields.issuetype.name }
     var project: String { fields.project.name }
@@ -63,6 +64,7 @@ struct JiraIssue: Codable, Identifiable, Hashable {
 struct IssueFields: Codable, Hashable {
     let summary: String
     let status: StatusField
+    let resolution: ResolutionField?
     let assignee: UserField?
     let issuetype: IssueTypeField
     let project: ProjectField
@@ -82,6 +84,7 @@ struct IssueFields: Codable, Hashable {
         IssueFields(
             summary: summary,
             status: status,
+            resolution: resolution,
             assignee: assignee,
             issuetype: issuetype,
             project: project,
@@ -103,6 +106,7 @@ struct IssueFields: Codable, Hashable {
         IssueFields(
             summary: summary,
             status: newStatus,
+            resolution: resolution,
             assignee: assignee,
             issuetype: issuetype,
             project: project,
@@ -122,6 +126,7 @@ struct IssueFields: Codable, Hashable {
     init(
         summary: String,
         status: StatusField,
+        resolution: ResolutionField?,
         assignee: UserField?,
         issuetype: IssueTypeField,
         project: ProjectField,
@@ -138,6 +143,7 @@ struct IssueFields: Codable, Hashable {
     ) {
         self.summary = summary
         self.status = status
+        self.resolution = resolution
         self.assignee = assignee
         self.issuetype = issuetype
         self.project = project
@@ -155,7 +161,7 @@ struct IssueFields: Codable, Hashable {
 
     // Coding keys to handle optional fields
     enum CodingKeys: String, CodingKey {
-        case summary, status, assignee, issuetype, project, priority, created, updated
+        case summary, status, resolution, assignee, issuetype, project, priority, created, updated
         case components
         case customfield_10014, customfield_10016, customfield_10020
         case timeoriginalestimate, timespent, timeestimate
@@ -166,6 +172,7 @@ struct IssueFields: Codable, Hashable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         summary = try container.decode(String.self, forKey: .summary)
         status = try container.decode(StatusField.self, forKey: .status)
+        resolution = try container.decodeIfPresent(ResolutionField.self, forKey: .resolution)
         assignee = try container.decodeIfPresent(UserField.self, forKey: .assignee)
         issuetype = try container.decode(IssueTypeField.self, forKey: .issuetype)
         project = try container.decode(ProjectField.self, forKey: .project)
@@ -217,6 +224,10 @@ struct ProjectField: Codable, Hashable {
 struct PriorityField: Codable, Hashable {
     let name: String
     let iconUrl: String?
+}
+
+struct ResolutionField: Codable, Hashable {
+    let name: String
 }
 
 struct ComponentField: Codable, Hashable {

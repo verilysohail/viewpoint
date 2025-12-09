@@ -2,6 +2,97 @@
 
 All notable changes to Viewpoint will be documented in this file.
 
+## [2.1] - 2025-12-09
+
+### Added
+
+**📊 Resolution Display in Issue Details**
+- Resolution field now displayed in issue detail window header next to Status
+- Shows resolution value (Done, Won't Do, Cancelled, etc.) for resolved issues
+- Color-coded green for easy identification
+
+### Improved
+
+**🤖 Smarter AI Status Transitions**
+- LLM-based semantic field matching for status transitions with resolutions
+- Natural language resolution matching - say "cancel this" and AI finds correct resolution value
+- No more hardcoded value matching - AI handles spelling variations and synonyms
+- Shared validation architecture for both CREATE and UPDATE operations
+- More reliable handling of resolution values like "Done", "Won't Do", "Cancelled"
+
+### Fixed
+
+**🪟 Indigo Keep on Top Toggle**
+- "Keep on Top" toggle now applies immediately when Indigo window opens
+- Previously required toggling off and on to take effect
+
+### Technical Improvements
+
+- Added `resolution` field to Jira API field list for issue fetching
+- Added `ResolutionField` decoding to `IssueFields` model
+- Refactored field validation to use shared `matchFieldsWithLLM()` function
+- Added `validateUpdateFields()` for UPDATE operations using same pattern as CREATE
+- Applied `.onAppear` modifier to apply initial window floating state
+
+---
+
+## [2.1] - 2025-12-08
+
+### Added
+
+**💬 @ Mention Autocomplete in Comments**
+- Type @ in comment fields to trigger autocomplete with real-time user search
+- Shows user display name and email address for disambiguation
+- Supports multiple users with same name across different domains
+- Keyboard navigation with arrow keys (↑↓), Tab, and Enter to select
+- Escape to dismiss autocomplete dropdown
+- Mentions convert to proper Jira ADF format with account IDs
+- Users mentioned in Jira comments now render correctly as @Username in Viewpoint
+
+**🧵 Threaded Comment Replies**
+- Reply directly to specific comments in issue detail view
+- Threaded conversation support for better organization
+- Comment input now available directly in issue detail Comments tab
+
+### Fixed
+
+**Menu Bar Quick Create**
+- Enter key now works correctly in menu bar popover when main window is visible
+- Previously, keyboard events were intercepted by main window
+- Added custom NSEvent monitoring for reliable keyboard event handling
+
+**Saved Views with JQL Negation**
+- Saved views now work correctly with JQL negation operators (!=, NOT IN)
+- Views store and execute original JQL instead of parsed filters
+- "Load More" uses stored JQL to prevent query reconstruction bugs
+- Parser skips status field when using negation operators to avoid conflicts
+- Fixed views showing 0 results when using "status != Done" or similar queries
+
+**Comment Mention Stability**
+- Fixed crash when inserting mentions (String index out of bounds error)
+- Added comprehensive bounds checking for safe string manipulation
+- Multi-word names now parse correctly (e.g., "Kevin Zheng" instead of just "Kevin")
+- Parser tries up to 5-word combinations for accurate name matching
+
+### Technical Improvements
+
+- Refactored `MenuBarQuickCreateView` to MVVM pattern with dedicated ViewModel
+- `MenuBarManager` now inherits from NSObject for proper NSPopoverDelegate conformance
+- `SavedView` model stores original JQL queries alongside parsed filters
+- Enhanced user search API returns email addresses for disambiguation
+- Implemented `KeyInterceptingTextView` for custom keyboard event handling
+- Comment parsing uses progressive word matching for multi-word display names
+- ADF mention node extraction for proper @ mention rendering from Jira
+
+---
+
+## [2.0.1] - 2025-12-04
+
+### Fixed
+- Epic-type issues now filtered out when grouping by Epic to avoid confusion
+
+---
+
 ## [2.0] - 2025-12-03
 
 🎉 **Official Release!** Viewpoint 2.0 is now production-ready.

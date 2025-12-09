@@ -130,8 +130,10 @@ class IndigoViewModel: ObservableObject {
                         }
 
                         // Execute any Jira operations from the intents sequentially
+                        Logger.shared.info("Executing \(response.intents.count) intents")
                         Task {
                             for intent in response.intents {
+                                Logger.shared.info("Executing intent: \(intent)")
                                 await self.executeIntent(intent)
                             }
                         }
@@ -182,7 +184,36 @@ class IndigoViewModel: ObservableObject {
                 text: "✏️ Updating issue \(issueKey): \(fields)",
                 sender: .system
             ))
-            let success = await jiraService.updateIssue(issueKey: issueKey, fields: fields)
+
+            // Validate and map fields using AI (same pattern as CREATE)
+            var fieldsToUse = fields
+            if let aiService = aiService {
+                addMessage(Message(
+                    text: "🔍 Validating field values...",
+                    sender: .system
+                ))
+
+                let (mappedFields, clarification) = await aiService.validateUpdateFields(
+                    issueKey: issueKey,
+                    userFields: fields
+                )
+
+                if let clarification = clarification {
+                    addMessage(Message(
+                        text: "❓ \(clarification)",
+                        sender: .system,
+                        status: .warning
+                    ))
+                    return
+                }
+
+                if let mapped = mappedFields {
+                    fieldsToUse = mapped
+                    Logger.shared.info("Using validated fields: \(fieldsToUse)")
+                }
+            }
+
+            let success = await jiraService.updateIssue(issueKey: issueKey, fields: fieldsToUse)
             if success {
                 addMessage(Message(
                     text: "✓ Successfully updated \(issueKey)!",
@@ -514,6 +545,111 @@ class IndigoViewModel: ObservableObject {
                 sender: .system,
                 status: .success
             ))
+
+        case .getTransitions(let issueKey):
+            addMessage(Message(
+                text: "🔄 Fetching available transitions and resolutions for \(issueKey)...",
+                sender: .system
+            ))
+
+            Logger.shared.info("GET_TRANSITIONS: Starting fetch for \(issueKey)")
+            // Fetch transitions for the issue (with field information)
+            guard let url = URL(string: "\(jiraService.config.jiraBaseURL)/rest/api/3/issue/\(issueKey)/transitions?expand=transitions.fields") else {
+                Logger.shared.error("GET_TRANSITIONS: Invalid URL")
+                addMessage(Message(
+                    text: "❌ Invalid URL for transitions",
+                    sender: .system,
+                    status: .error
+                ))
+                return
+            }
+
+            Logger.shared.info("GET_TRANSITIONS: Fetching from URL: \(url)")
+            do {
+                let request = jiraService.createRequest(url: url)
+                Logger.shared.info("GET_TRANSITIONS: Request created, fetching...")
+                let (data, _) = try await URLSession.shared.data(for: request)
+                Logger.shared.info("GET_TRANSITIONS: Received \(data.count) bytes")
+
+                if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let transitions = json["transitions"] as? [[String: Any]] {
+
+                    Logger.shared.info("GET_TRANSITIONS: Parsed JSON, found \(transitions.count) transitions")
+                    var transitionInfo: [String] = []
+
+                    for (index, trans) in transitions.enumerated() {
+                        Logger.shared.info("GET_TRANSITIONS: Processing transition \(index + 1)")
+                        Logger.shared.info("GET_TRANSITIONS: Transition keys: \(trans.keys.joined(separator: ", "))")
+
+                        if let transitionName = trans["name"] as? String,
+                           let to = trans["to"] as? [String: Any],
+                           let toStatus = to["name"] as? String {
+
+                            Logger.shared.info("GET_TRANSITIONS: Found transition '\(transitionName)' -> '\(toStatus)'")
+
+                            var info = "Transition '\(transitionName)' → Status '\(toStatus)'"
+
+                            // Check for required fields (like resolution)
+                            if let fields = trans["fields"] as? [String: Any] {
+                                var requiredFields: [String] = []
+                                for (fieldKey, fieldValue) in fields {
+                                    if let fieldDict = fieldValue as? [String: Any],
+                                       let required = fieldDict["required"] as? Bool,
+                                       required,
+                                       let fieldName = fieldDict["name"] as? String {
+
+                                        if let allowedValues = fieldDict["allowedValues"] as? [[String: Any]] {
+                                            let values = allowedValues.compactMap { $0["name"] as? String }
+                                            if !values.isEmpty {
+                                                requiredFields.append("\(fieldName): [\(values.joined(separator: ", "))]")
+                                            }
+                                        } else {
+                                            requiredFields.append(fieldName)
+                                        }
+                                    }
+                                }
+                                if !requiredFields.isEmpty {
+                                    info += "\n    Required: \(requiredFields.joined(separator: ", "))"
+                                }
+                            }
+
+                            transitionInfo.append(info)
+                            Logger.shared.info("GET_TRANSITIONS: Added transition info: \(info)")
+                        } else {
+                            Logger.shared.error("GET_TRANSITIONS: Failed to parse transition \(index + 1)")
+                        }
+                    }
+
+                    Logger.shared.info("GET_TRANSITIONS: Collected \(transitionInfo.count) transition infos")
+                    let message = "Available transitions for \(issueKey):\n\n" + transitionInfo.joined(separator: "\n\n")
+                    Logger.shared.info("GET_TRANSITIONS: Final message length: \(message.count) chars")
+                    Logger.shared.info("GET_TRANSITIONS: About to call addMessage")
+
+                    addMessage(Message(
+                        text: message,
+                        sender: .system,
+                        status: .success
+                    ))
+                    Logger.shared.info("GET_TRANSITIONS: addMessage completed")
+                } else {
+                    Logger.shared.error("GET_TRANSITIONS: Failed to parse JSON response")
+                    if let jsonString = String(data: data, encoding: .utf8) {
+                        Logger.shared.error("GET_TRANSITIONS: Response was: \(jsonString)")
+                    }
+                    addMessage(Message(
+                        text: "❌ Could not parse transitions for \(issueKey)",
+                        sender: .system,
+                        status: .error
+                    ))
+                }
+            } catch {
+                Logger.shared.error("GET_TRANSITIONS: Error - \(error.localizedDescription)")
+                addMessage(Message(
+                    text: "❌ Failed to fetch transitions for \(issueKey): \(error.localizedDescription)",
+                    sender: .system,
+                    status: .error
+                ))
+            }
         }
     }
 

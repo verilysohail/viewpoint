@@ -149,6 +149,9 @@ struct IssueDetailView: View {
             // Metadata row
             HStack(spacing: 20) {
                 metadataItem(label: "Status", value: issueDetails.issue.status, color: statusColor(for: issueDetails.issue.status))
+                if let resolution = issueDetails.issue.resolution {
+                    metadataItem(label: "Resolution", value: resolution, color: .green)
+                }
                 metadataItem(label: "Assignee", value: issueDetails.issue.assignee ?? "Unassigned", color: .secondary)
                 if let priority = issueDetails.issue.priority {
                     metadataItem(label: "Priority", value: priority, color: priorityColor(for: priority))

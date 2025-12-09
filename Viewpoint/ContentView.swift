@@ -559,7 +559,9 @@ struct IssueListView: View {
         .onAppear {
             // Expand all sections by default on first appearance
             if expandedSections.isEmpty {
-                expandedSections = Set(groupedIssues.map { $0.0 })
+                Task { @MainActor in
+                    expandedSections = Set(groupedIssues.map { $0.0 })
+                }
             }
         }
     }

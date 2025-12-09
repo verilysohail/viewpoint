@@ -84,9 +84,12 @@ class AIService {
             onComplete: { result in
                 switch result {
                 case .success(let usage):
+                    Logger.shared.info("AI full response: \(fullResponse)")
+                    let intents = self.parseIntents(from: fullResponse)
+                    Logger.shared.info("Parsed \(intents.count) intents from response")
                     let response = AIResponse(
                         text: fullResponse,
-                        intents: self.parseIntents(from: fullResponse),
+                        intents: intents,
                         inputTokens: usage.inputTokens,
                         outputTokens: usage.outputTokens
                     )
@@ -118,6 +121,7 @@ class AIService {
             availableSprints: jiraService.availableSprints,
             availableEpics: Array(jiraService.availableEpics),
             availableStatuses: Array(jiraService.availableStatuses),
+            availableResolutions: Array(jiraService.availableResolutions),
             lastSearchResults: nil,
             lastCreatedIssue: nil
         )
@@ -138,6 +142,7 @@ class AIService {
         - Current user: \(context.currentUser)
         - Available projects: \(context.availableProjects.joined(separator: ", "))
         - Available statuses: \(context.availableStatuses.joined(separator: ", "))
+        - Available resolutions: \(context.availableResolutions.joined(separator: ", "))
         - Active filters: \(describeFilters(context.currentFilters))
         - Visible issues: \(context.visibleIssues.count) issues currently loaded
         - Available sprints: \(context.availableSprints.map { $0.name }.joined(separator: ", "))
@@ -165,12 +170,24 @@ class AIService {
            - labels: Labels (comma-separated)
            Example: CREATE: project=SETI | summary=Fix bug | type=Bug | assignee=\(context.currentUser) | estimate=2h | sprint=current | components=Management Tasks
 
-        3. UPDATE: Update issue fields (summary, description, assignee, priority, labels, components, estimates, sprint, epic, status)
+        3. UPDATE: Update issue fields (summary, description, assignee, priority, labels, components, estimates, sprint, epic, status, resolution)
            Format: `UPDATE: <key> | field=value | field2=value2`
            Example: UPDATE: SETI-123 | summary=New title | priority=High | labels=urgent,bug
-           Status updates: You can use natural language like "done", "closed", "complete", "in progress", "cancel", etc.
-           The system will intelligently match these to the correct Jira transition. The "Available statuses" list
-           shows statuses from currently loaded issues, but other statuses may be available for specific issues.
+
+           STATUS UPDATES WITH RESOLUTION:
+           When closing/cancelling an issue, ALWAYS use both status and resolution:
+           - For status field: Use natural language like "close", "closed", "done" - the system will match to correct transition
+           - For resolution field: Match to available resolutions from CURRENT CONTEXT (Done, Won't Do, Cancelled, etc.)
+
+           Examples:
+           - User says "cancel this" → UPDATE: SETI-123 | status=close | resolution=Cancelled
+           - User says "close as won't do" → UPDATE: SETI-123 | status=close | resolution=Won't Do
+           - User says "mark as done" → UPDATE: SETI-123 | status=close | resolution=Done
+           - User says "complete this" → UPDATE: SETI-123 | status=close | resolution=Done
+
+           For other status changes (not closing):
+           - "start this" → UPDATE: SETI-123 | status=in progress
+           - "put on hold" → UPDATE: SETI-123 | status=on hold
 
         4. COMMENT: Add comment to issue
            Format: `COMMENT: <key> | <comment text>`
@@ -205,6 +222,13 @@ class AIService {
            Format: `DETAIL: <key>`
            Example: DETAIL: SETI-123
            Use this when user asks for "details", "full information", "comments", or "show me" an issue
+
+        12. GET_TRANSITIONS: Query available transitions and resolutions for an issue
+           Format: `GET_TRANSITIONS: <key>`
+           Example: GET_TRANSITIONS: SETI-123
+           Returns available status transitions and their required fields (like resolution values)
+           IMPORTANT: Use this BEFORE updating status when user mentions closing/cancelling with specific resolutions
+           This tells you exactly which transitions are available and what resolution values you can use
 
         IMPORTANT:
         - Always explain what you're doing in plain language alongside the operation
@@ -242,121 +266,237 @@ class AIService {
         }.joined(separator: "\n  ")
     }
 
-    // MARK: - Field Validation and Mapping
+    // MARK: - Shared Field Validation
 
-    func validateAndMapFields(userFields: [String: Any], projectKey: String, issueType: String = "Story") async -> (mappedFields: [String: Any]?, clarificationNeeded: String?) {
-        // Fetch metadata for this project/issue type
-        guard let metadata = await jiraService.fetchCreateMetadata(projectKey: projectKey, issueType: issueType) else {
-            Logger.shared.error("Failed to fetch field metadata for \(projectKey)/\(issueType)")
-            return (userFields, nil) // Fallback to original fields
+    /// Core LLM-based field matching - shared between CREATE and UPDATE operations
+    private func matchFieldsWithLLM(
+        userFields: [String: Any],
+        fieldDescriptions: [[String: Any]],
+        context: String
+    ) async -> (mappedFields: [String: Any]?, clarificationNeeded: String?) {
+
+        guard let fieldDescriptionsData = try? JSONSerialization.data(withJSONObject: fieldDescriptions, options: [.prettyPrinted]),
+              let fieldDescriptionsJSON = String(data: fieldDescriptionsData, encoding: .utf8) else {
+            Logger.shared.error("Failed to serialize field descriptions")
+            return (nil, nil)
         }
 
-        // Build a summary of available fields for the LLM
+        let prompt = """
+        You are a field mapping expert for Jira. Match user-provided values to Jira's allowed values.
+
+        USER PROVIDED VALUES:
+        \(userFields.map { "\($0.key): \($0.value)" }.joined(separator: "\n"))
+
+        AVAILABLE FIELDS AND ALLOWED VALUES:
+        \(fieldDescriptionsJSON)
+
+        CONTEXT: \(context)
+
+        YOUR TASK:
+        1. Map each user value to the correct allowed value from the list
+        2. Handle spelling variations (e.g., "Cancelled" → "Canceled")
+        3. Handle synonyms (e.g., "wont do" → "Won't Do", "done" → "Done")
+        4. If a value cannot be matched, use the closest semantic match
+        5. If critical information is missing or ambiguous, respond with "CLARIFICATION_NEEDED: <your question>"
+
+        Respond with valid JSON mapping field keys to matched values:
+        ```json
+        {
+          "fieldKey": "matched_value"
+        }
+        ```
+        """
+
+        guard let client = client else {
+            Logger.shared.error("AI client not configured for field validation")
+            return (nil, nil)
+        }
+
+        do {
+            let result = try await client.generateContent(prompt: prompt)
+            Logger.shared.info("Field matching LLM response: \(result)")
+
+            // Check if clarification is needed
+            if result.contains("CLARIFICATION_NEEDED:") {
+                let clarification = result.replacingOccurrences(of: "CLARIFICATION_NEEDED:", with: "").trimmingCharacters(in: .whitespacesAndNewlines)
+                return (nil, clarification)
+            }
+
+            // Parse JSON response
+            if let jsonStart = result.range(of: "```json"),
+               let jsonEnd = result.range(of: "```", range: jsonStart.upperBound..<result.endIndex) {
+                let jsonString = String(result[jsonStart.upperBound..<jsonEnd.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+
+                if let jsonData = jsonString.data(using: .utf8),
+                   let mappedFields = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any] {
+                    Logger.shared.info("Successfully matched fields: \(mappedFields)")
+                    return (mappedFields, nil)
+                }
+            }
+
+            Logger.shared.warning("Could not parse LLM response")
+            return (nil, nil)
+
+        } catch {
+            Logger.shared.error("LLM field matching failed: \(error)")
+            return (nil, nil)
+        }
+    }
+
+    /// Extract field descriptions from Jira metadata
+    private func extractFieldDescriptions(from metadata: [String: Any]) -> [[String: Any]] {
         var fieldDescriptions: [[String: Any]] = []
+
         for (fieldKey, fieldData) in metadata {
             guard let fieldDict = fieldData as? [String: Any] else { continue }
 
             var description: [String: Any] = [
                 "key": fieldKey,
                 "name": fieldDict["name"] as? String ?? fieldKey,
-                "required": fieldDict["required"] as? Bool ?? false,
-                "schema": fieldDict["schema"] as Any
+                "required": fieldDict["required"] as? Bool ?? false
             ]
 
-            // Add allowed values if present
             if let allowedValues = fieldDict["allowedValues"] as? [[String: Any]] {
                 let values = allowedValues.compactMap { $0["name"] as? String ?? $0["value"] as? String }
-                description["allowedValues"] = values
+                if !values.isEmpty {
+                    description["allowedValues"] = values
+                }
             }
 
             fieldDescriptions.append(description)
         }
 
-        // Convert to JSON for the LLM
-        guard let fieldDescriptionsData = try? JSONSerialization.data(withJSONObject: fieldDescriptions, options: [.prettyPrinted]),
-              let fieldDescriptionsJSON = String(data: fieldDescriptionsData, encoding: .utf8) else {
-            Logger.shared.error("Failed to serialize field descriptions")
+        return fieldDescriptions
+    }
+
+    // MARK: - CREATE Field Validation
+
+    func validateAndMapFields(userFields: [String: Any], projectKey: String, issueType: String = "Story") async -> (mappedFields: [String: Any]?, clarificationNeeded: String?) {
+        // Fetch metadata for this project/issue type
+        guard let metadata = await jiraService.fetchCreateMetadata(projectKey: projectKey, issueType: issueType) else {
+            Logger.shared.error("Failed to fetch field metadata for \(projectKey)/\(issueType)")
             return (userFields, nil)
         }
 
-        // Use LLM to map user fields to Jira fields
-        let prompt = """
-        You are a field mapping expert for Jira. Given user-provided fields and the available Jira field schema, map the user's intent to the correct Jira field format.
+        let fieldDescriptions = extractFieldDescriptions(from: metadata)
 
-        USER PROVIDED FIELDS:
-        \(userFields.map { "\($0.key): \($0.value)" }.joined(separator: "\n"))
-
-        AVAILABLE JIRA FIELDS FOR \(projectKey)/\(issueType):
-        \(fieldDescriptionsJSON)
-
-        ADDITIONAL CONTEXT:
-        - Current user email: \(jiraService.config.jiraEmail)
-        - If user wants "current sprint", you need to return: sprint=current (this will be resolved server-side)
-        - Time estimates should be in Jira format: "30m", "2h", "1d"
-        - For assignee, use the email address provided
-
-        YOUR TASK:
-        1. Map each user field to the correct Jira field key
-        2. Validate that values are acceptable
-        3. Check if any required fields are missing
-        4. If anything is ambiguous or missing, respond with "CLARIFICATION_NEEDED: <your question>"
-        5. Otherwise, respond with valid JSON mapping in this format:
-
-        ```json
-        {
-          "fieldKey1": "value1",
-          "fieldKey2": "value2"
-        }
-        ```
-
-        For example:
-        - User's "estimate" or "originalEstimate" maps to "timetracking" field with format {"originalEstimate": "value"}
-        - User's "assignee" maps to "assignee" field
-        - User's "sprint" maps to "customfield_10020" (sprint field)
-        - User's "epic" maps to "customfield_10014" (epic field)
-        - User's "components" may need to be formatted as array of objects
-
-        RESPOND NOW:
-        """
-
-        // Make LLM call for field mapping
-        guard let client = client else {
-            Logger.shared.error("AI client not configured for field validation")
+        if fieldDescriptions.isEmpty {
             return (userFields, nil)
         }
 
-        // Use the same client to make a mapping call
-        let result: String
-        do {
-            result = try await client.generateContent(prompt: prompt)
-        } catch {
-            Logger.shared.error("Field mapping LLM call failed: \(error)")
-            return (userFields, nil)
-        }
+        let context = "Creating a \(issueType) in project \(projectKey). Current user: \(jiraService.config.jiraEmail)"
 
-        Logger.shared.info("Field mapping LLM response: \(result)")
+        let (mappedFields, clarification) = await matchFieldsWithLLM(
+            userFields: userFields,
+            fieldDescriptions: fieldDescriptions,
+            context: context
+        )
 
-        // Check if clarification is needed
-        if result.contains("CLARIFICATION_NEEDED:") {
-            let clarification = result.replacingOccurrences(of: "CLARIFICATION_NEEDED:", with: "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if let clarification = clarification {
             return (nil, clarification)
         }
 
-        // Parse the JSON response
-        if let jsonStart = result.range(of: "```json"),
-           let jsonEnd = result.range(of: "```", range: jsonStart.upperBound..<result.endIndex) {
-            let jsonString = String(result[jsonStart.upperBound..<jsonEnd.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
-
-            if let jsonData = jsonString.data(using: .utf8),
-               let mappedFields = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any] {
-                Logger.shared.info("Successfully mapped fields: \(mappedFields)")
-                return (mappedFields, nil)
+        // Merge mapped fields with original (mapped takes precedence)
+        if let mapped = mappedFields {
+            var result = userFields
+            for (key, value) in mapped {
+                result[key] = value
             }
+            return (result, nil)
         }
 
-        // Fallback: use original fields
-        Logger.shared.warning("Could not parse LLM mapping response, using original fields")
         return (userFields, nil)
+    }
+
+    // MARK: - UPDATE Field Validation
+
+    func validateUpdateFields(issueKey: String, userFields: [String: Any]) async -> (mappedFields: [String: Any]?, clarificationNeeded: String?) {
+        // Check if this involves a status change with additional fields
+        guard userFields["status"] != nil else {
+            // No status change - return fields as-is
+            return (userFields, nil)
+        }
+
+        // Only validate if there are fields besides status
+        let fieldsToValidate = userFields.filter { $0.key != "status" }
+        if fieldsToValidate.isEmpty {
+            return (userFields, nil)
+        }
+
+        // Fetch available transitions with field definitions
+        let transitionsURL = "\(jiraService.config.jiraBaseURL)/rest/api/3/issue/\(issueKey)/transitions?expand=transitions.fields"
+        guard let url = URL(string: transitionsURL) else {
+            Logger.shared.error("Invalid URL for fetching transitions")
+            return (userFields, nil)
+        }
+
+        let request = jiraService.createRequest(url: url)
+
+        do {
+            let (data, _) = try await URLSession.shared.data(for: request)
+
+            guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let transitions = json["transitions"] as? [[String: Any]] else {
+                Logger.shared.error("Failed to parse transitions response")
+                return (userFields, nil)
+            }
+
+            // Find matching transition and extract field metadata
+            let targetStatus = (userFields["status"] as? String)?.lowercased() ?? ""
+            var transitionFields: [String: Any]?
+
+            for trans in transitions {
+                if let transName = trans["name"] as? String,
+                   let to = trans["to"] as? [String: Any],
+                   let toStatus = to["name"] as? String {
+                    if transName.lowercased().contains(targetStatus) ||
+                       toStatus.lowercased().contains(targetStatus) ||
+                       targetStatus.contains(transName.lowercased()) ||
+                       targetStatus.contains(toStatus.lowercased()) {
+                        transitionFields = trans["fields"] as? [String: Any]
+                        break
+                    }
+                }
+            }
+
+            guard let fields = transitionFields else {
+                Logger.shared.warning("No matching transition found or no fields to validate")
+                return (userFields, nil)
+            }
+
+            let fieldDescriptions = extractFieldDescriptions(from: fields)
+
+            if fieldDescriptions.isEmpty {
+                return (userFields, nil)
+            }
+
+            let context = "Transitioning issue \(issueKey) to status '\(userFields["status"] ?? "unknown")'"
+
+            let (mappedFields, clarification) = await matchFieldsWithLLM(
+                userFields: fieldsToValidate,
+                fieldDescriptions: fieldDescriptions,
+                context: context
+            )
+
+            if let clarification = clarification {
+                return (nil, clarification)
+            }
+
+            // Merge mapped fields back with original (including status)
+            if let mapped = mappedFields {
+                var result = userFields
+                for (key, value) in mapped {
+                    result[key] = value
+                }
+                return (result, nil)
+            }
+
+            return (userFields, nil)
+
+        } catch {
+            Logger.shared.error("Failed to validate update fields: \(error)")
+            return (userFields, nil)
+        }
     }
 
     // MARK: - Intent Parsing
@@ -507,6 +647,13 @@ class AIService {
             if trimmed.hasPrefix("DETAIL:") {
                 let issueKey = trimmed.replacingOccurrences(of: "DETAIL:", with: "").trimmingCharacters(in: .whitespaces)
                 intents.append(.showIssueDetail(issueKey: issueKey))
+                continue
+            }
+
+            // Get available transitions
+            if trimmed.hasPrefix("GET_TRANSITIONS:") {
+                let issueKey = trimmed.replacingOccurrences(of: "GET_TRANSITIONS:", with: "").trimmingCharacters(in: .whitespaces)
+                intents.append(.getTransitions(issueKey: issueKey))
                 continue
             }
         }

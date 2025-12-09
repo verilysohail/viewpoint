@@ -27,6 +27,7 @@ class JiraService: ObservableObject {
     @Published var availableEpics: Set<String> = []
     @Published var availableSprints: [JiraSprint] = []
     @Published var availableComponents: Set<String> = []
+    @Published var availableResolutions: Set<String> = ["Done", "Won't Do", "Duplicate", "Cannot Reproduce", "Cancelled"]
 
     // Epic summaries (epic key -> summary)
     @Published var epicSummaries: [String: String] = [:]
@@ -166,7 +167,7 @@ class JiraService: ObservableObject {
 
     // MARK: - API Requests
 
-    private func createRequest(url: URL) -> URLRequest {
+    func createRequest(url: URL) -> URLRequest {
         var request = URLRequest(url: url)
         let credentials = "\(config.jiraEmail):\(config.jiraAPIKey)"
         let credentialData = credentials.data(using: .utf8)!
@@ -217,7 +218,7 @@ class JiraService: ObservableObject {
                 var queryItems = [
                     URLQueryItem(name: "jql", value: jql),
                     URLQueryItem(name: "maxResults", value: String(maxResults)),
-                    URLQueryItem(name: "fields", value: "summary,status,assignee,issuetype,project,priority,created,updated,components,customfield_10014,customfield_10016,customfield_10020,timeoriginalestimate,timespent,timeestimate")
+                    URLQueryItem(name: "fields", value: "summary,status,resolution,assignee,issuetype,project,priority,created,updated,components,customfield_10014,customfield_10016,customfield_10020,timeoriginalestimate,timespent,timeestimate")
                 ]
 
                 // Add nextPageToken if we have one (not on first page)
@@ -330,7 +331,7 @@ class JiraService: ObservableObject {
             components.queryItems = [
                 URLQueryItem(name: "jql", value: jql),
                 URLQueryItem(name: "maxResults", value: String(maxResults)),
-                URLQueryItem(name: "fields", value: "summary,status,assignee,issuetype,project,priority,created,updated,components,customfield_10014,customfield_10016,customfield_10020,timeoriginalestimate,timespent,timeestimate")
+                URLQueryItem(name: "fields", value: "summary,status,resolution,assignee,issuetype,project,priority,created,updated,components,customfield_10014,customfield_10016,customfield_10020,timeoriginalestimate,timespent,timeestimate")
             ]
 
             guard let url = components.url else {
@@ -698,7 +699,7 @@ class JiraService: ObservableObject {
         components.queryItems = [
             URLQueryItem(name: "jql", value: jql),
             URLQueryItem(name: "maxResults", value: "100"),
-            URLQueryItem(name: "fields", value: "summary,status,assignee,issuetype,project,priority,created,updated,components,customfield_10014,customfield_10016,customfield_10020,timeoriginalestimate,timespent,timeestimate")
+            URLQueryItem(name: "fields", value: "summary,status,resolution,assignee,issuetype,project,priority,created,updated,components,customfield_10014,customfield_10016,customfield_10020,timeoriginalestimate,timespent,timeestimate")
         ]
 
         guard let url = components.url else {
@@ -908,8 +909,8 @@ class JiraService: ObservableObject {
     }
 
     func updateIssueStatus(issueKey: String, newStatus: String, fieldValues: [String: String] = [:]) async -> Bool {
-        // First, get available transitions for this issue
-        let transitionsURL = "\(config.jiraBaseURL)/rest/api/3/issue/\(issueKey)/transitions"
+        // First, get available transitions for this issue (with field expansion to get allowed values)
+        let transitionsURL = "\(config.jiraBaseURL)/rest/api/3/issue/\(issueKey)/transitions?expand=transitions.fields"
 
         guard let url = URL(string: transitionsURL) else {
             print("Invalid URL for getting transitions")
@@ -936,13 +937,34 @@ class JiraService: ObservableObject {
                 }
 
                 // Find the best matching transition using smart matching
-                if let (matchedTransition, matchType) = findBestTransition(query: newStatus, transitions: transitions),
-                   let transitionId = matchedTransition["id"] as? String,
-                   let transitionName = matchedTransition["name"] as? String,
-                   let to = matchedTransition["to"] as? [String: Any],
-                   let targetStatus = to["name"] as? String {
+                if let (matchedTransition, matchType) = findBestTransition(query: newStatus, transitions: transitions) {
+                    Logger.shared.info("Matched '\(newStatus)' to transition using \(matchType)")
+                    Logger.shared.info("Matched transition keys: \(matchedTransition.keys.joined(separator: ", "))")
 
-                    Logger.shared.info("Matched '\(newStatus)' to transition '\(transitionName)' using \(matchType)")
+                    // Transition ID might be String or Int
+                    let transitionId: String
+                    if let idString = matchedTransition["id"] as? String {
+                        transitionId = idString
+                    } else if let idInt = matchedTransition["id"] as? Int {
+                        transitionId = String(idInt)
+                    } else {
+                        Logger.shared.error("Failed to extract transition ID from matched transition (not String or Int)")
+                        return false
+                    }
+                    guard let transitionName = matchedTransition["name"] as? String else {
+                        Logger.shared.error("Failed to extract transition name from matched transition")
+                        return false
+                    }
+                    guard let to = matchedTransition["to"] as? [String: Any] else {
+                        Logger.shared.error("Failed to extract 'to' status from matched transition")
+                        return false
+                    }
+                    guard let targetStatus = to["name"] as? String else {
+                        Logger.shared.error("Failed to extract target status name from 'to'")
+                        return false
+                    }
+
+                    Logger.shared.info("Matched '\(newStatus)' to transition '\(transitionName)' (ID: \(transitionId)) -> Status '\(targetStatus)'")
 
                     // Execute the transition
                     var transitionRequest = createRequest(url: url)
@@ -952,23 +974,34 @@ class JiraService: ObservableObject {
                         "transition": ["id": transitionId]
                     ]
 
-                    // Add field values if provided
+                    // Add field values if provided (already validated by AIService)
                     if !fieldValues.isEmpty {
                         var fields: [String: Any] = [:]
                         for (key, value) in fieldValues {
-                            // Resolution field needs to be in a specific format
-                            if key == "resolution" {
-                                fields[key] = ["name": value]
-                            } else {
-                                fields[key] = value
-                            }
+                            // Wrap values in {"name": value} format for Jira API
+                            fields[key] = ["name": value]
+                            Logger.shared.info("Adding field '\(key)' with value '\(value)'")
                         }
                         requestBody["fields"] = fields
                     }
 
                     transitionRequest.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
 
-                    let (_, response) = try await URLSession.shared.data(for: transitionRequest)
+                    // Log the request body for debugging
+                    if let bodyData = transitionRequest.httpBody,
+                       let bodyString = String(data: bodyData, encoding: .utf8) {
+                        Logger.shared.info("Transition request body: \(bodyString)")
+                    }
+
+                    let (responseData, response) = try await URLSession.shared.data(for: transitionRequest)
+
+                    // Log response status
+                    if let httpResponse = response as? HTTPURLResponse {
+                        Logger.shared.info("Transition response status: \(httpResponse.statusCode)")
+                        if let responseString = String(data: responseData, encoding: .utf8) {
+                            Logger.shared.info("Transition response body: \(responseString)")
+                        }
+                    }
 
                     if let httpResponse = response as? HTTPURLResponse,
                        httpResponse.statusCode == 204 || httpResponse.statusCode == 200 {
@@ -987,9 +1020,10 @@ class JiraService: ObservableObject {
                         return true
                     }
                 }
+
+                Logger.shared.warning("Could not find transition matching: \(newStatus)")
             }
 
-            Logger.shared.warning("Could not find transition matching: \(newStatus)")
             return false
         } catch {
             Logger.shared.error("Failed to update issue status: \(error)")
@@ -1066,9 +1100,8 @@ class JiraService: ObservableObject {
     private func findSemanticTransitionMatch(query: String, transitions: [(transition: [String: Any], name: String, targetStatus: String)]) -> (transition: [String: Any], name: String, targetStatus: String)? {
         // Define semantic groups for common status changes
         let semanticGroups: [[String]] = [
-            ["done", "complete", "completed", "finish", "finished", "close", "closed", "resolve", "resolved"],
+            ["done", "complete", "completed", "finish", "finished", "close", "closed", "resolve", "resolved", "cancel", "cancelled", "canceled"],
             ["start", "started", "begin", "in progress", "inprogress", "working", "in-progress"],
-            ["cancel", "cancelled", "canceled", "reject", "rejected", "abort", "aborted"],
             ["todo", "to do", "backlog", "open", "new"],
             ["review", "in review", "reviewing", "code review"],
             ["testing", "test", "qa", "quality assurance"],
@@ -1094,6 +1127,7 @@ class JiraService: ObservableObject {
 
         return nil
     }
+
 
     func logWork(issueKey: String, timeSpentSeconds: Int) async -> Bool {
         let urlString = "\(config.jiraBaseURL)/rest/api/3/issue/\(issueKey)/worklog"
