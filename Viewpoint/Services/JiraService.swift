@@ -2220,12 +2220,12 @@ class JiraService: ObservableObject {
                 // It's a project name - convert to key
                 Logger.shared.info("Converted project name '\(projectValue)' to key '\(projectKey)'")
                 jiraFields["project"] = ["key": projectKey]
-            } else if availableProjects.contains(where: { $0.key == projectValue }) {
-                // It's already a valid project key
+            } else if projectNameToKey.values.contains(projectValue) {
+                // It's already a valid project key (found in the values of name-to-key map)
                 jiraFields["project"] = ["key": projectValue]
             } else {
                 // Assume it's a key and let Jira validate
-                Logger.shared.warning("Project '\(projectValue)' not found in name-to-key map or known projects, using as-is")
+                Logger.shared.warning("Project '\(projectValue)' not found in name-to-key map, using as-is")
                 jiraFields["project"] = ["key": projectValue]
             }
         } else {
