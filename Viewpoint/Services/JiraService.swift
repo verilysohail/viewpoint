@@ -2142,8 +2142,21 @@ class JiraService: ObservableObject {
         if let projectDict = fields["project"] as? [String: Any] {
             // Already in Jira format
             jiraFields["project"] = projectDict
-        } else if let projectKey = fields["project"] as? String {
-            jiraFields["project"] = ["key": projectKey]
+        } else if let projectValue = fields["project"] as? String {
+            // Check if this is a project name that needs to be converted to a key
+            // LLM might return full project name instead of key
+            if let projectKey = projectNameToKey[projectValue] {
+                // It's a project name - convert to key
+                Logger.shared.info("Converted project name '\(projectValue)' to key '\(projectKey)'")
+                jiraFields["project"] = ["key": projectKey]
+            } else if availableProjects.contains(where: { $0.key == projectValue }) {
+                // It's already a valid project key
+                jiraFields["project"] = ["key": projectValue]
+            } else {
+                // Assume it's a key and let Jira validate
+                Logger.shared.warning("Project '\(projectValue)' not found in name-to-key map or known projects, using as-is")
+                jiraFields["project"] = ["key": projectValue]
+            }
         } else {
             Logger.shared.error("Missing required field: project")
             return (false, nil)
@@ -2200,23 +2213,24 @@ class JiraService: ObservableObject {
             jiraFields["timetracking"] = ["originalEstimate": estimateStr]
         }
 
+        // Helper to get project key from jiraFields (which has already been resolved)
+        let resolvedProjectKey: String? = {
+            if let projectDict = jiraFields["project"] as? [String: Any] {
+                return projectDict["key"] as? String
+            }
+            return nil
+        }()
+
         // Optional: Sprint (accept customfield_10020 directly or resolve from sprint name)
         if let customfieldValue = fields["customfield_10020"] {
             if let sprintString = customfieldValue as? String, sprintString.lowercased() == "current" {
                 // Resolve "current" to actual sprint ID
-                let projectKey: String?
-                if let projectDict = fields["project"] as? [String: Any] {
-                    projectKey = projectDict["key"] as? String
-                } else {
-                    projectKey = fields["project"] as? String
-                }
-
-                let activeSprint = await findActiveSprintForProject(projectKey: projectKey)
+                let activeSprint = await findActiveSprintForProject(projectKey: resolvedProjectKey)
                 if let sprint = activeSprint {
                     jiraFields["customfield_10020"] = sprint.id
-                    Logger.shared.info("Using current sprint for project \(projectKey ?? "unknown"): \(sprint.name) (ID: \(sprint.id))")
+                    Logger.shared.info("Using current sprint for project \(resolvedProjectKey ?? "unknown"): \(sprint.name) (ID: \(sprint.id))")
                 } else {
-                    Logger.shared.warning("Could not find active sprint for project: \(projectKey ?? "unknown")")
+                    Logger.shared.warning("Could not find active sprint for project: \(resolvedProjectKey ?? "unknown")")
                 }
             } else {
                 // Already an ID or other value, use as-is
@@ -2225,31 +2239,17 @@ class JiraService: ObservableObject {
         } else if let sprintValue = fields["sprint"] as? String {
             if sprintValue.lowercased() == "current" {
                 // Find the currently active sprint for this project
-                let projectKey: String?
-                if let projectDict = fields["project"] as? [String: Any] {
-                    projectKey = projectDict["key"] as? String
-                } else {
-                    projectKey = fields["project"] as? String
-                }
-
-                let activeSprint = await findActiveSprintForProject(projectKey: projectKey)
+                let activeSprint = await findActiveSprintForProject(projectKey: resolvedProjectKey)
 
                 if let sprint = activeSprint {
                     jiraFields["customfield_10020"] = sprint.id
-                    Logger.shared.info("Using current sprint for project \(projectKey ?? "unknown"): \(sprint.name) (ID: \(sprint.id))")
+                    Logger.shared.info("Using current sprint for project \(resolvedProjectKey ?? "unknown"): \(sprint.name) (ID: \(sprint.id))")
                 } else {
-                    Logger.shared.warning("Could not find active sprint for project: \(projectKey ?? "unknown")")
+                    Logger.shared.warning("Could not find active sprint for project: \(resolvedProjectKey ?? "unknown")")
                 }
             } else {
                 // Try to find sprint by name (optionally scoped to project)
-                let projectKey: String?
-                if let projectDict = fields["project"] as? [String: Any] {
-                    projectKey = projectDict["key"] as? String
-                } else {
-                    projectKey = fields["project"] as? String
-                }
-
-                let matchingSprint = await findSprintByName(sprintValue, projectKey: projectKey)
+                let matchingSprint = await findSprintByName(sprintValue, projectKey: resolvedProjectKey)
                 if let sprint = matchingSprint {
                     jiraFields["customfield_10020"] = sprint.id
                     Logger.shared.info("Matched sprint '\(sprintValue)' to: \(sprint.name) (ID: \(sprint.id))")
@@ -2261,8 +2261,8 @@ class JiraService: ObservableObject {
 
         // Optional: Epic (needs epic key)
         if let epicQuery = fields["epic"] as? String {
-            // Try to find epic by semantic search
-            let matchingEpic = await findEpicByName(epicQuery)
+            // Try to find epic by semantic search (scoped to the target project)
+            let matchingEpic = await findEpicByName(epicQuery, projectKey: resolvedProjectKey)
             if let epicKey = matchingEpic {
                 jiraFields["customfield_10014"] = epicKey
                 Logger.shared.info("Matched epic '\(epicQuery)' to: \(epicKey)")
@@ -2500,12 +2500,12 @@ class JiraService: ObservableObject {
         return []
     }
 
-    func findEpicByName(_ query: String) async -> String? {
+    func findEpicByName(_ query: String, projectKey: String? = nil) async -> String? {
         // First, search in currently loaded epics
         let summaries = await MainActor.run { self.epicSummaries }
         let lowercaseQuery = query.lowercased()
 
-        Logger.shared.info("Searching for epic matching query: '\(query)'")
+        Logger.shared.info("Searching for epic matching query: '\(query)' in project: \(projectKey ?? "any")")
         Logger.shared.info("Available epics in loaded issues: \(summaries.map { "\($0.key): \($0.value)" }.joined(separator: ", "))")
 
         // First try exact match on epic key (e.g., "SETI-123")
@@ -2549,12 +2549,18 @@ class JiraService: ObservableObject {
 
         // Not found in loaded epics - search ALL epics in the project
         Logger.shared.info("Epic not found in loaded issues, searching all epics in project...")
-        return await searchAllEpicsInProject(query: query, queryWords: queryWords)
+        return await searchAllEpicsInProject(query: query, queryWords: queryWords, projectKey: projectKey)
     }
 
-    private func searchAllEpicsInProject(query: String, queryWords: [String]) async -> String? {
-        // Get the current project(s)
-        let projects = await MainActor.run { Array(self.filters.projects) }
+    private func searchAllEpicsInProject(query: String, queryWords: [String], projectKey: String? = nil) async -> String? {
+        // Get the project to search - either explicit or from current filters
+        let projects: [String]
+        if let pk = projectKey {
+            projects = [pk]
+        } else {
+            projects = await MainActor.run { Array(self.filters.projects) }
+        }
+
         guard !projects.isEmpty else {
             Logger.shared.warning("No project selected, cannot search all epics")
             return nil
