@@ -215,6 +215,7 @@ struct FilterPanel: View {
         jiraService.filters.sprints.removeAll()
         jiraService.filters.startDate = nil
         jiraService.filters.endDate = nil
+        jiraService.filters.showOnlyMyIssues = false
         jiraService.applyFilters()
     }
 }

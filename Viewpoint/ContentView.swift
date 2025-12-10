@@ -5,9 +5,9 @@ struct ContentView: View {
     @EnvironmentObject var viewsManager: ViewsManager
     @Environment(\.openWindow) private var openWindow
     @AppStorage("showFilters") private var showFilters: Bool = true
-    @AppStorage("sortOption") private var sortOptionRaw: String = "dateCreated"
+    @AppStorage("sortOption") private var sortOptionRaw: String = "Date Created"
     @AppStorage("sortDirection") private var sortDirectionRaw: String = "descending"
-    @AppStorage("groupOption") private var groupOptionRaw: String = "none"
+    @AppStorage("groupOption") private var groupOptionRaw: String = "None"
     @AppStorage("textSize") private var textSize: Double = 1.0
     @AppStorage("filterPanelHeight") private var filterPanelHeight: Double = 200
     @State private var showingLogWorkForSelected = false
@@ -495,10 +495,15 @@ struct IssueListView: View {
     @State private var draggedIssueKeys: Set<String> = []
     @State private var dropTargetGroup: String? = nil
 
+    // Show disclosure groups when grouping is active (not .none), even if there's only one group
+    private var shouldShowGroups: Bool {
+        groupOption != .none
+    }
+
     var body: some View {
         List(selection: $selectedIssues) {
             ForEach(groupedIssues, id: \.0) { groupName, issues in
-                if groupedIssues.count > 1 {
+                if shouldShowGroups {
                     DisclosureGroup(
                         isExpanded: Binding(
                             get: { expandedSections.contains(groupName) },

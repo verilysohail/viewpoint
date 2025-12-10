@@ -826,6 +826,12 @@ class JiraService: ObservableObject {
     func applyFilters(updateOptions: Bool = false, fromSavedView: Bool = false) {
         saveFilters()
 
+        // Clear currentJQL when applying filters - we want to use the filters, not old JQL
+        // This fixes the bug where saved view JQL persists after clearing filters
+        if !fromSavedView {
+            currentJQL = nil
+        }
+
         // Auto-detect if projects changed - if so, update options to populate filters
         let projectsChanged = previousProjects != filters.projects
         let shouldUpdateOptions = updateOptions || projectsChanged
