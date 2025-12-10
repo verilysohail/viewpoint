@@ -815,29 +815,40 @@ struct IssueRow: View {
                         .foregroundColor(.secondary)
                 }
 
-                if let epic = issue.epic {
-                    Label(epic, systemImage: "flag")
+                if let epicKey = issue.epic {
+                    // Show full epic name if available, otherwise show key
+                    let epicDisplay = jiraService.epicSummaries[epicKey].map { "\(epicKey): \($0)" } ?? epicKey
+                    Label(epicDisplay, systemImage: "flag")
                         .font(scaledFont(.caption))
                         .foregroundColor(.purple)
                 }
 
-                // Time tracking fields
+                // Time tracking fields with labels
                 if let originalEstimate = issue.fields.timeoriginalestimate {
-                    Label(formatTime(seconds: originalEstimate), systemImage: "clock")
-                        .font(scaledFont(.caption))
-                        .foregroundColor(.secondary)
+                    HStack(spacing: 2) {
+                        Image(systemName: "clock")
+                        Text("Est: \(formatTime(seconds: originalEstimate))")
+                    }
+                    .font(scaledFont(.caption))
+                    .foregroundColor(.secondary)
                 }
 
                 if let timeSpent = issue.fields.timespent {
-                    Label(formatTime(seconds: timeSpent), systemImage: "timer")
-                        .font(scaledFont(.caption))
-                        .foregroundColor(.blue)
+                    HStack(spacing: 2) {
+                        Image(systemName: "timer")
+                        Text("Logged: \(formatTime(seconds: timeSpent))")
+                    }
+                    .font(scaledFont(.caption))
+                    .foregroundColor(.blue)
                 }
 
                 if let timeRemaining = issue.fields.timeestimate {
-                    Label(formatTime(seconds: timeRemaining), systemImage: "hourglass")
-                        .font(scaledFont(.caption))
-                        .foregroundColor(.orange)
+                    HStack(spacing: 2) {
+                        Image(systemName: "hourglass")
+                        Text("Remaining: \(formatTime(seconds: timeRemaining))")
+                    }
+                    .font(scaledFont(.caption))
+                    .foregroundColor(.orange)
                 }
 
                 Spacer()

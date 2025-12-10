@@ -76,6 +76,8 @@ struct IssueDetailView: View {
     @State private var selectedTab = 0
     @State private var newCommentText = ""
     @State private var isSubmittingComment = false
+    @State private var childIssues: [JiraIssue] = []
+    @State private var isLoadingChildren = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -89,6 +91,7 @@ struct IssueDetailView: View {
                 Text("Details").tag(0)
                 Text("Comments (\(issueDetails.comments.count))").tag(1)
                 Text("History").tag(2)
+                Text("Child Items (\(childIssues.count))").tag(3)
             }
             .pickerStyle(.segmented)
             .padding(.horizontal, 12)
@@ -105,12 +108,17 @@ struct IssueDetailView: View {
                     commentsTab
                 case 2:
                     historyTab
+                case 3:
+                    childItemsTab
                 default:
                     detailsTab
                 }
             }
         }
         .frame(minWidth: 600, minHeight: 500)
+        .task {
+            await loadChildIssues()
+        }
     }
 
     private var headerView: some View {
@@ -383,6 +391,88 @@ struct IssueDetailView: View {
         }
     }
 
+    private var childItemsTab: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                if isLoadingChildren {
+                    HStack {
+                        ProgressView()
+                            .scaleEffect(0.8)
+                        Text("Loading child items...")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.top, 20)
+                } else if childIssues.isEmpty {
+                    VStack(spacing: 8) {
+                        Image(systemName: "doc.text.magnifyingglass")
+                            .font(.system(size: 32))
+                            .foregroundColor(.secondary)
+                        Text("No child items found")
+                            .font(.headline)
+                            .foregroundColor(.secondary)
+                        Text(childItemsDescription)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.top, 40)
+                } else {
+                    ForEach(childIssues) { child in
+                        ChildIssueRow(issue: child)
+                    }
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.top, 12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var childItemsDescription: String {
+        let issueType = issueDetails.issue.issueType.lowercased()
+        switch issueType {
+        case "epic":
+            return "Stories and tasks linked to this epic will appear here"
+        case "story", "task":
+            return "Subtasks of this \(issueDetails.issue.issueType) will appear here"
+        case "initiative":
+            return "Epics linked to this initiative will appear here"
+        default:
+            return "Child items will appear here"
+        }
+    }
+
+    private func loadChildIssues() async {
+        await MainActor.run { isLoadingChildren = true }
+
+        let issueType = issueDetails.issue.issueType.lowercased()
+        var jql: String
+
+        switch issueType {
+        case "epic":
+            // For epics, find stories/tasks with this epic as parent
+            jql = "\"Epic Link\" = \(issueDetails.issue.key) OR parent = \(issueDetails.issue.key) ORDER BY created DESC"
+        case "story", "task", "bug":
+            // For stories/tasks, find subtasks
+            jql = "parent = \(issueDetails.issue.key) ORDER BY created DESC"
+        case "initiative":
+            // For initiatives, find child epics (assuming parent link)
+            jql = "parent = \(issueDetails.issue.key) AND type = Epic ORDER BY created DESC"
+        default:
+            // Generic: look for subtasks or linked issues
+            jql = "parent = \(issueDetails.issue.key) ORDER BY created DESC"
+        }
+
+        let children = await jiraService.fetchChildIssues(jql: jql)
+        await MainActor.run {
+            childIssues = children
+            isLoadingChildren = false
+        }
+    }
+
     private func timeItem(label: String, seconds: Int) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(label)
@@ -440,6 +530,117 @@ struct IssueDetailView: View {
 }
 
 // MARK: - Supporting Views
+
+struct ChildIssueRow: View {
+    let issue: JiraIssue
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        HStack(spacing: 12) {
+            // Issue type icon
+            issueTypeIcon
+                .frame(width: 20, height: 20)
+
+            VStack(alignment: .leading, spacing: 4) {
+                // Key and summary
+                HStack {
+                    Text(issue.key)
+                        .font(.system(size: 12, design: .monospaced))
+                        .foregroundColor(.blue)
+
+                    Text(issue.issueType)
+                        .font(.system(size: 10))
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 2)
+                        .background(issueTypeColor.opacity(0.2))
+                        .cornerRadius(3)
+                }
+
+                Text(issue.summary)
+                    .font(.system(size: 13))
+                    .lineLimit(2)
+            }
+
+            Spacer()
+
+            // Status badge
+            Text(issue.status)
+                .font(.system(size: 10))
+                .padding(.horizontal, 6)
+                .padding(.vertical, 3)
+                .background(statusColor.opacity(0.2))
+                .foregroundColor(statusColor)
+                .cornerRadius(4)
+
+            // Assignee
+            if let assignee = issue.assignee {
+                Text(assignee)
+                    .font(.system(size: 10))
+                    .foregroundColor(.secondary)
+            }
+        }
+        .padding(.vertical, 8)
+        .padding(.horizontal, 12)
+        .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+        .cornerRadius(6)
+        .onTapGesture(count: 2) {
+            openWindow(value: issue.key)
+        }
+        .help("Double-click to open details")
+    }
+
+    private var issueTypeIcon: some View {
+        let iconName: String
+        let color: Color
+
+        switch issue.issueType.lowercased() {
+        case "bug":
+            iconName = "ladybug.fill"
+            color = .red
+        case "story":
+            iconName = "book.fill"
+            color = .green
+        case "task":
+            iconName = "checkmark.square.fill"
+            color = .blue
+        case "subtask", "sub-task":
+            iconName = "square.split.2x1.fill"
+            color = .cyan
+        case "epic":
+            iconName = "bolt.fill"
+            color = .purple
+        default:
+            iconName = "doc.fill"
+            color = .gray
+        }
+
+        return Image(systemName: iconName)
+            .foregroundColor(color)
+    }
+
+    private var issueTypeColor: Color {
+        switch issue.issueType.lowercased() {
+        case "bug": return .red
+        case "story": return .green
+        case "task": return .blue
+        case "subtask", "sub-task": return .cyan
+        case "epic": return .purple
+        default: return .gray
+        }
+    }
+
+    private var statusColor: Color {
+        let status = issue.status.lowercased()
+        if status.contains("done") || status.contains("closed") {
+            return .green
+        } else if status.contains("progress") {
+            return .blue
+        } else if status.contains("review") {
+            return .orange
+        }
+        return .gray
+    }
+}
 
 struct DetailSection<Content: View>: View {
     let title: String

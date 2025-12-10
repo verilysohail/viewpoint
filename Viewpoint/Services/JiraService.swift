@@ -1904,6 +1904,48 @@ class JiraService: ObservableObject {
         }
     }
 
+    func fetchChildIssues(jql: String) async -> [JiraIssue] {
+        var components = URLComponents(string: "\(config.jiraBaseURL)/rest/api/3/search/jql")!
+        components.queryItems = [
+            URLQueryItem(name: "jql", value: jql),
+            URLQueryItem(name: "maxResults", value: "50"),
+            URLQueryItem(name: "fields", value: "summary,status,resolution,assignee,issuetype,project,priority,created,updated,components,customfield_10014,customfield_10016,customfield_10020,timeoriginalestimate,timespent,timeestimate")
+        ]
+
+        guard let url = components.url else {
+            Logger.shared.error("Invalid URL for fetching child issues")
+            return []
+        }
+
+        let request = createRequest(url: url)
+
+        do {
+            Logger.shared.info("Fetching child issues with JQL: \(jql)")
+
+            let (data, response) = try await URLSession.shared.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw URLError(.badServerResponse)
+            }
+
+            Logger.shared.info("Child issues response status: \(httpResponse.statusCode)")
+
+            if httpResponse.statusCode == 200 {
+                let searchResponse = try JSONDecoder().decode(JiraSearchResponse.self, from: data)
+                Logger.shared.info("Found \(searchResponse.issues.count) child issues")
+                return searchResponse.issues
+            } else {
+                if let errorMessage = String(data: data, encoding: .utf8) {
+                    Logger.shared.error("Error fetching child issues: \(errorMessage)")
+                }
+                return []
+            }
+        } catch {
+            Logger.shared.error("Failed to fetch child issues: \(error)")
+            return []
+        }
+    }
+
     func fetchComments(issueKey: String) async -> (success: Bool, comments: [IssueComment]?) {
         let urlString = "\(config.jiraBaseURL)/rest/api/3/issue/\(issueKey)/comment?expand=properties"
 
