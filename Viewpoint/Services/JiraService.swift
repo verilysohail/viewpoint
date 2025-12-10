@@ -1442,8 +1442,37 @@ class JiraService: ObservableObject {
                 jiraFields["description"] = value
 
             case "assignee":
-                if let assigneeEmail = value as? String {
-                    jiraFields["assignee"] = ["emailAddress": assigneeEmail]
+                if let assigneeValue = value as? String {
+                    // Check if it's the current user's email
+                    if assigneeValue == config.jiraEmail, let accountId = currentUserAccountId {
+                        jiraFields["assignee"] = ["accountId": accountId]
+                        Logger.shared.info("Using current user accountId for assignee")
+                    } else if assigneeValue.contains("@") {
+                        // Looks like an email address - search for user
+                        let users = await searchUsers(query: assigneeValue)
+                        if let user = users.first(where: { $0.email.lowercased() == assigneeValue.lowercased() }) {
+                            jiraFields["assignee"] = ["accountId": user.accountId]
+                            Logger.shared.info("Found user by email '\(assigneeValue)': \(user.displayName) (\(user.accountId))")
+                        } else if let user = users.first {
+                            jiraFields["assignee"] = ["accountId": user.accountId]
+                            Logger.shared.info("Using first search result for '\(assigneeValue)': \(user.displayName) (\(user.accountId))")
+                        } else {
+                            Logger.shared.warning("Could not find user with email: \(assigneeValue)")
+                        }
+                    } else {
+                        // Assume it's a display name - search for user
+                        let users = await searchUsers(query: assigneeValue)
+                        if let user = users.first(where: { $0.displayName.lowercased() == assigneeValue.lowercased() }) {
+                            jiraFields["assignee"] = ["accountId": user.accountId]
+                            Logger.shared.info("Found user by exact name '\(assigneeValue)': \(user.displayName) (\(user.accountId))")
+                        } else if let user = users.first {
+                            // Use best match from search
+                            jiraFields["assignee"] = ["accountId": user.accountId]
+                            Logger.shared.info("Using first search result for '\(assigneeValue)': \(user.displayName) (\(user.accountId))")
+                        } else {
+                            Logger.shared.warning("Could not find user matching: \(assigneeValue)")
+                        }
+                    }
                 }
 
             case "priority":
