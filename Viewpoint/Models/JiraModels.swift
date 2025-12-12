@@ -11,6 +11,7 @@ struct JiraIssue: Codable, Identifiable, Hashable {
     var status: String { fields.status.name }
     var resolution: String? { fields.resolution?.name }
     var assignee: String? { fields.assignee?.displayName }
+    var reporter: String? { fields.reporter?.displayName }
     var issueType: String { fields.issuetype.name }
     var project: String { fields.project.name }
     var epic: String? { fields.customfield_10014 } // Epic link field
@@ -66,6 +67,7 @@ struct IssueFields: Codable, Hashable {
     let status: StatusField
     let resolution: ResolutionField?
     let assignee: UserField?
+    let reporter: UserField?
     let issuetype: IssueTypeField
     let project: ProjectField
     let priority: PriorityField?
@@ -86,6 +88,7 @@ struct IssueFields: Codable, Hashable {
             status: status,
             resolution: resolution,
             assignee: assignee,
+            reporter: reporter,
             issuetype: issuetype,
             project: project,
             priority: priority,
@@ -108,6 +111,7 @@ struct IssueFields: Codable, Hashable {
             status: newStatus,
             resolution: resolution,
             assignee: assignee,
+            reporter: reporter,
             issuetype: issuetype,
             project: project,
             priority: priority,
@@ -128,6 +132,7 @@ struct IssueFields: Codable, Hashable {
         status: StatusField,
         resolution: ResolutionField?,
         assignee: UserField?,
+        reporter: UserField?,
         issuetype: IssueTypeField,
         project: ProjectField,
         priority: PriorityField?,
@@ -145,6 +150,7 @@ struct IssueFields: Codable, Hashable {
         self.status = status
         self.resolution = resolution
         self.assignee = assignee
+        self.reporter = reporter
         self.issuetype = issuetype
         self.project = project
         self.priority = priority
@@ -161,7 +167,7 @@ struct IssueFields: Codable, Hashable {
 
     // Coding keys to handle optional fields
     enum CodingKeys: String, CodingKey {
-        case summary, status, resolution, assignee, issuetype, project, priority, created, updated
+        case summary, status, resolution, assignee, reporter, issuetype, project, priority, created, updated
         case components
         case customfield_10014, customfield_10016, customfield_10020
         case timeoriginalestimate, timespent, timeestimate
@@ -174,6 +180,7 @@ struct IssueFields: Codable, Hashable {
         status = try container.decode(StatusField.self, forKey: .status)
         resolution = try container.decodeIfPresent(ResolutionField.self, forKey: .resolution)
         assignee = try container.decodeIfPresent(UserField.self, forKey: .assignee)
+        reporter = try container.decodeIfPresent(UserField.self, forKey: .reporter)
         issuetype = try container.decode(IssueTypeField.self, forKey: .issuetype)
         project = try container.decode(ProjectField.self, forKey: .project)
         priority = try container.decodeIfPresent(PriorityField.self, forKey: .priority)

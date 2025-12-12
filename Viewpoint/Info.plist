@@ -15,9 +15,9 @@
 	<key>CFBundlePackageType</key>
 	<string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
 	<key>CFBundleShortVersionString</key>
-	<string>2.1.1</string>
+	<string>2.2</string>
 	<key>CFBundleVersion</key>
-	<string>20251210</string>
+	<string>20251211</string>
 	<key>CFBundleIconName</key>
 	<string>AppIcon</string>
 	<key>LSMinimumSystemVersion</key>

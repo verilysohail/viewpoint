@@ -809,11 +809,9 @@ struct IssueRow: View {
                         .foregroundColor(.gray)
                 }
 
-                if let assignee = issue.assignee {
-                    Label(assignee, systemImage: "person")
-                        .font(scaledFont(.caption))
-                        .foregroundColor(.secondary)
-                }
+                CompactUserSelector(issue: issue, fieldType: .assignee)
+
+                CompactUserSelector(issue: issue, fieldType: .reporter)
 
                 if let epicKey = issue.epic {
                     // Show full epic name if available, otherwise show key

@@ -2,7 +2,7 @@ import SwiftUI
 
 struct FilterPanel: View {
     @EnvironmentObject var jiraService: JiraService
-    @State private var expandedSections: Set<FilterCategory> = [.project]
+    @State private var expandedSections: Set<FilterCategory> = []
 
     var body: some View {
         ScrollView {

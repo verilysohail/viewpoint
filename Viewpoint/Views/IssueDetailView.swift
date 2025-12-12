@@ -160,7 +160,18 @@ struct IssueDetailView: View {
                 if let resolution = issueDetails.issue.resolution {
                     metadataItem(label: "Resolution", value: resolution, color: .green)
                 }
-                metadataItem(label: "Assignee", value: issueDetails.issue.assignee ?? "Unassigned", color: .secondary)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Assignee")
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
+                    UserSelector(issue: issueDetails.issue, fieldType: .assignee)
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Reporter")
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
+                    UserSelector(issue: issueDetails.issue, fieldType: .reporter)
+                }
                 if let priority = issueDetails.issue.priority {
                     metadataItem(label: "Priority", value: priority, color: priorityColor(for: priority))
                 }

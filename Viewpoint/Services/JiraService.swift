@@ -218,7 +218,7 @@ class JiraService: ObservableObject {
                 var queryItems = [
                     URLQueryItem(name: "jql", value: jql),
                     URLQueryItem(name: "maxResults", value: String(maxResults)),
-                    URLQueryItem(name: "fields", value: "summary,status,resolution,assignee,issuetype,project,priority,created,updated,components,customfield_10014,customfield_10016,customfield_10020,timeoriginalestimate,timespent,timeestimate")
+                    URLQueryItem(name: "fields", value: "summary,status,resolution,assignee,reporter,issuetype,project,priority,created,updated,components,customfield_10014,customfield_10016,customfield_10020,timeoriginalestimate,timespent,timeestimate")
                 ]
 
                 // Add nextPageToken if we have one (not on first page)
@@ -331,7 +331,7 @@ class JiraService: ObservableObject {
             components.queryItems = [
                 URLQueryItem(name: "jql", value: jql),
                 URLQueryItem(name: "maxResults", value: String(maxResults)),
-                URLQueryItem(name: "fields", value: "summary,status,resolution,assignee,issuetype,project,priority,created,updated,components,customfield_10014,customfield_10016,customfield_10020,timeoriginalestimate,timespent,timeestimate")
+                URLQueryItem(name: "fields", value: "summary,status,resolution,assignee,reporter,issuetype,project,priority,created,updated,components,customfield_10014,customfield_10016,customfield_10020,timeoriginalestimate,timespent,timeestimate")
             ]
 
             guard let url = components.url else {
@@ -699,7 +699,7 @@ class JiraService: ObservableObject {
         components.queryItems = [
             URLQueryItem(name: "jql", value: jql),
             URLQueryItem(name: "maxResults", value: "100"),
-            URLQueryItem(name: "fields", value: "summary,status,resolution,assignee,issuetype,project,priority,created,updated,components,customfield_10014,customfield_10016,customfield_10020,timeoriginalestimate,timespent,timeestimate")
+            URLQueryItem(name: "fields", value: "summary,status,resolution,assignee,reporter,issuetype,project,priority,created,updated,components,customfield_10014,customfield_10016,customfield_10020,timeoriginalestimate,timespent,timeestimate")
         ]
 
         guard let url = components.url else {
@@ -1563,6 +1563,35 @@ class JiraService: ObservableObject {
                     }
                 }
 
+            case "reporter":
+                if let reporterValue = value as? String {
+                    if reporterValue.contains("@") {
+                        // Looks like an email address - search for user
+                        let users = await searchUsers(query: reporterValue)
+                        if let user = users.first(where: { $0.email.lowercased() == reporterValue.lowercased() }) {
+                            jiraFields["reporter"] = ["accountId": user.accountId]
+                            Logger.shared.info("Found reporter by email '\(reporterValue)': \(user.displayName) (\(user.accountId))")
+                        } else if let user = users.first {
+                            jiraFields["reporter"] = ["accountId": user.accountId]
+                            Logger.shared.info("Using first search result for reporter '\(reporterValue)': \(user.displayName) (\(user.accountId))")
+                        } else {
+                            Logger.shared.warning("Could not find user with email for reporter: \(reporterValue)")
+                        }
+                    } else {
+                        // Assume it's a display name - search for user
+                        let users = await searchUsers(query: reporterValue)
+                        if let user = users.first(where: { $0.displayName.lowercased() == reporterValue.lowercased() }) {
+                            jiraFields["reporter"] = ["accountId": user.accountId]
+                            Logger.shared.info("Found reporter by exact name '\(reporterValue)': \(user.displayName) (\(user.accountId))")
+                        } else if let user = users.first {
+                            jiraFields["reporter"] = ["accountId": user.accountId]
+                            Logger.shared.info("Using first search result for reporter '\(reporterValue)': \(user.displayName) (\(user.accountId))")
+                        } else {
+                            Logger.shared.warning("Could not find user matching reporter: \(reporterValue)")
+                        }
+                    }
+                }
+
             default:
                 Logger.shared.warning("Unknown field: \(key)")
             }
@@ -1938,7 +1967,7 @@ class JiraService: ObservableObject {
         components.queryItems = [
             URLQueryItem(name: "jql", value: jql),
             URLQueryItem(name: "maxResults", value: "50"),
-            URLQueryItem(name: "fields", value: "summary,status,resolution,assignee,issuetype,project,priority,created,updated,components,customfield_10014,customfield_10016,customfield_10020,timeoriginalestimate,timespent,timeestimate")
+            URLQueryItem(name: "fields", value: "summary,status,resolution,assignee,reporter,issuetype,project,priority,created,updated,components,customfield_10014,customfield_10016,customfield_10020,timeoriginalestimate,timespent,timeestimate")
         ]
 
         guard let url = components.url else {

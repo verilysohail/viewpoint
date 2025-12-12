@@ -10,6 +10,7 @@
 		4EFE67 /* ManageViewsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C76CE /* ManageViewsSheet.swift */; };
 		54A55E /* SaveViewDialog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 069156 /* SaveViewDialog.swift */; };
 		A693ABF02EE7AB4C00768F00 /* MentionTextField.swift in Sources */ = {isa = PBXBuildFile; fileRef = A693ABEF2EE7AB4C00768F00 /* MentionTextField.swift */; };
+		A693ABF12EEA123400768F00 /* UserSelector.swift in Sources */ = {isa = PBXBuildFile; fileRef = A693ABF22EEA123400768F00 /* UserSelector.swift */; };
 		A6BACF672ED7C002000A4D2B /* JQLAutocomplete.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6BACF662ED7C002000A4D2B /* JQLAutocomplete.swift */; };
 		A6BACF692ED7C013000A4D2B /* JQLBuilderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6BACF682ED7C013000A4D2B /* JQLBuilderView.swift */; };
 		A6CBA4BA2ED0395200528322 /* WhisperService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6CBA4B92ED0395200528322 /* WhisperService.swift */; };
@@ -43,6 +44,7 @@
 		2B4DE6 /* SavedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedView.swift; sourceTree = "<group>"; };
 		6C76CE /* ManageViewsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManageViewsSheet.swift; sourceTree = "<group>"; };
 		A693ABEF2EE7AB4C00768F00 /* MentionTextField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MentionTextField.swift; sourceTree = "<group>"; };
+		A693ABF22EEA123400768F00 /* UserSelector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserSelector.swift; sourceTree = "<group>"; };
 		A6BACF662ED7C002000A4D2B /* JQLAutocomplete.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JQLAutocomplete.swift; sourceTree = "<group>"; };
 		A6BACF682ED7C013000A4D2B /* JQLBuilderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JQLBuilderView.swift; sourceTree = "<group>"; };
 		A6CBA4B82ED0395200528322 /* AudioRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioRecorder.swift; sourceTree = "<group>"; };
@@ -146,6 +148,7 @@
 			isa = PBXGroup;
 			children = (
 				A693ABEF2EE7AB4C00768F00 /* MentionTextField.swift */,
+				A693ABF22EEA123400768F00 /* UserSelector.swift */,
 				A6F144C42EE16E04006F5F2C /* MenuBarQuickCreateView.swift */,
 				A6BACF682ED7C013000A4D2B /* JQLBuilderView.swift */,
 				BB0005 /* FilterPanel.swift */,
@@ -253,6 +256,7 @@
 				A6F144C52EE16E04006F5F2C /* MenuBarQuickCreateView.swift in Sources */,
 				AA0002 /* ContentView.swift in Sources */,
 				A693ABF02EE7AB4C00768F00 /* MentionTextField.swift in Sources */,
+				A693ABF12EEA123400768F00 /* UserSelector.swift in Sources */,
 				AA0003 /* JiraModels.swift in Sources */,
 				A6CBA4BD2ED0395F00528322 /* IndigoModels.swift in Sources */,
 				A6BACF692ED7C013000A4D2B /* JQLBuilderView.swift in Sources */,
