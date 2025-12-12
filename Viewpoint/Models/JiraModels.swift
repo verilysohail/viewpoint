@@ -16,6 +16,7 @@ struct JiraIssue: Codable, Identifiable, Hashable {
     var project: String { fields.project.name }
     var epic: String? { fields.customfield_10014 } // Epic link field
     var priority: String? { fields.priority?.name }
+    var pcmMaster: CMDBObjectField? { fields.customfield_11920?.first } // PCM Master (CMDB)
 
     // Helper to create a copy with updated fields
     func withFields(_ newFields: IssueFields) -> JiraIssue {
@@ -77,6 +78,7 @@ struct IssueFields: Codable, Hashable {
     let customfield_10014: String? // Epic Link
     let customfield_10016: Double? // Story Points
     let customfield_10020: [SprintField]? // Sprint
+    let customfield_11920: [CMDBObjectField]? // PCM Master (CMDB lookup)
     let timeoriginalestimate: Int? // Original Estimate (seconds)
     let timespent: Int? // Time Logged (seconds)
     let timeestimate: Int? // Time Remaining (seconds)
@@ -98,6 +100,7 @@ struct IssueFields: Codable, Hashable {
             customfield_10014: customfield_10014,
             customfield_10016: customfield_10016,
             customfield_10020: sprint,
+            customfield_11920: customfield_11920,
             timeoriginalestimate: timeoriginalestimate,
             timespent: timespent,
             timeestimate: timeestimate
@@ -121,6 +124,7 @@ struct IssueFields: Codable, Hashable {
             customfield_10014: customfield_10014,
             customfield_10016: customfield_10016,
             customfield_10020: customfield_10020,
+            customfield_11920: customfield_11920,
             timeoriginalestimate: timeoriginalestimate,
             timespent: timespent,
             timeestimate: timeestimate
@@ -142,6 +146,7 @@ struct IssueFields: Codable, Hashable {
         customfield_10014: String?,
         customfield_10016: Double?,
         customfield_10020: [SprintField]?,
+        customfield_11920: [CMDBObjectField]?,
         timeoriginalestimate: Int?,
         timespent: Int?,
         timeestimate: Int?
@@ -160,6 +165,7 @@ struct IssueFields: Codable, Hashable {
         self.customfield_10014 = customfield_10014
         self.customfield_10016 = customfield_10016
         self.customfield_10020 = customfield_10020
+        self.customfield_11920 = customfield_11920
         self.timeoriginalestimate = timeoriginalestimate
         self.timespent = timespent
         self.timeestimate = timeestimate
@@ -169,7 +175,7 @@ struct IssueFields: Codable, Hashable {
     enum CodingKeys: String, CodingKey {
         case summary, status, resolution, assignee, reporter, issuetype, project, priority, created, updated
         case components
-        case customfield_10014, customfield_10016, customfield_10020
+        case customfield_10014, customfield_10016, customfield_10020, customfield_11920
         case timeoriginalestimate, timespent, timeestimate
     }
 
@@ -190,6 +196,7 @@ struct IssueFields: Codable, Hashable {
         customfield_10014 = try container.decodeIfPresent(String.self, forKey: .customfield_10014)
         customfield_10016 = try container.decodeIfPresent(Double.self, forKey: .customfield_10016)
         customfield_10020 = try container.decodeIfPresent([SprintField].self, forKey: .customfield_10020)
+        customfield_11920 = try container.decodeIfPresent([CMDBObjectField].self, forKey: .customfield_11920)
         timeoriginalestimate = try container.decodeIfPresent(Int.self, forKey: .timeoriginalestimate)
         timespent = try container.decodeIfPresent(Int.self, forKey: .timespent)
         timeestimate = try container.decodeIfPresent(Int.self, forKey: .timeestimate)
@@ -200,6 +207,64 @@ struct SprintField: Codable, Hashable {
     let id: Int
     let name: String
     let state: String?
+}
+
+struct CMDBObjectField: Hashable {
+    let objectId: String
+    let label: String?
+    let objectKey: String?
+
+    init(objectId: String, label: String? = nil, objectKey: String? = nil) {
+        self.objectId = objectId
+        self.label = label
+        self.objectKey = objectKey
+    }
+}
+
+extension CMDBObjectField: Decodable {
+    enum CodingKeys: String, CodingKey {
+        case objectId, id, label, displayName, name
+        case objectKey = "key"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        // Try objectId first, then fall back to id (Jira API may return either)
+        if let oid = try container.decodeIfPresent(String.self, forKey: .objectId) {
+            objectId = oid
+        } else if let id = try container.decodeIfPresent(String.self, forKey: .id) {
+            objectId = id
+        } else if let idInt = try container.decodeIfPresent(Int.self, forKey: .id) {
+            objectId = String(idInt)
+        } else {
+            throw DecodingError.keyNotFound(CodingKeys.objectId, DecodingError.Context(codingPath: container.codingPath, debugDescription: "Neither objectId nor id found"))
+        }
+        // Try multiple possible field names for the display label
+        if let lbl = try container.decodeIfPresent(String.self, forKey: .label) {
+            label = lbl
+        } else if let dn = try container.decodeIfPresent(String.self, forKey: .displayName) {
+            label = dn
+        } else if let nm = try container.decodeIfPresent(String.self, forKey: .name) {
+            label = nm
+        } else {
+            label = nil
+        }
+        objectKey = try container.decodeIfPresent(String.self, forKey: .objectKey)
+    }
+}
+
+extension CMDBObjectField: Encodable {
+    enum EncodingKeys: String, CodingKey {
+        case objectId, label
+        case objectKey = "key"
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: EncodingKeys.self)
+        try container.encode(objectId, forKey: .objectId)
+        try container.encodeIfPresent(label, forKey: .label)
+        try container.encodeIfPresent(objectKey, forKey: .objectKey)
+    }
 }
 
 struct StatusField: Codable, Hashable {

@@ -264,6 +264,9 @@ struct IssueDetailView: View {
                     // Log Time
                     IssueLogTimeButton(issue: issueDetails.issue)
 
+                    // PCM Master
+                    PCMMasterSelector(issue: issueDetails.issue)
+
                     Spacer()
                 }
                 .frame(width: 250, alignment: .leading)

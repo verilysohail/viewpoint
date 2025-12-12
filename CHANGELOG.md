@@ -2,6 +2,36 @@
 
 All notable changes to Viewpoint will be documented in this file.
 
+## [2.2] - 2025-12-11
+
+### Added
+
+**👤 Reporter Field**
+- Reporter information now displays in both the list view and detail view for all tickets
+- Click on reporter to change it with autocomplete user search
+
+**✏️ Editable Assignee & Reporter**
+- Click on assignee in list or detail view to change it with autocomplete user search
+- Click on reporter in list or detail view to change it with autocomplete user search
+- Real-time user search as you type
+- Shows user display name and email for disambiguation
+
+### Improved
+
+**🎯 User Search Accuracy**
+- User selection now uses account IDs directly when updating
+- Prevents issues when multiple users share the same display name
+- Fixes incorrect user assignment in organizations with duplicate names
+
+**🎨 Collapsed Filters**
+- All filter sections now start collapsed by default for a cleaner interface
+
+### Fixed
+
+- Fixed issue where selecting a user with a duplicate display name could assign the wrong person
+
+---
+
 ## [2.1] - 2025-12-09
 
 ### Added

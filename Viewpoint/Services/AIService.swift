@@ -50,9 +50,30 @@ class AIService {
             return
         }
 
-        // Build conversation context
-        let context = buildContext()
-        let systemPrompt = buildSystemPrompt(context: context)
+        // Build conversation context asynchronously then proceed with chat
+        Task {
+            let context = await buildContext()
+            let systemPrompt = buildSystemPrompt(context: context)
+
+            await sendMessageWithContext(
+                client: client,
+                systemPrompt: systemPrompt,
+                userMessage: userMessage,
+                conversationHistory: conversationHistory,
+                onChunk: onChunk,
+                onComplete: onComplete
+            )
+        }
+    }
+
+    private func sendMessageWithContext(
+        client: VertexAIClient,
+        systemPrompt: String,
+        userMessage: String,
+        conversationHistory: [Message],
+        onChunk: @escaping (String) -> Void,
+        onComplete: @escaping (Result<AIResponse, Error>) -> Void
+    ) async {
 
         // Convert conversation history to chat messages
         var messages: [ChatMessage] = [
@@ -104,24 +125,45 @@ class AIService {
 
     // MARK: - Context Building
 
-    private func buildContext() -> AIContext {
+    private func buildContext() async -> AIContext {
         let currentUser = UserDefaults.standard.string(forKey: "jiraEmail") ?? "unknown"
 
         // Get selected issues by mapping IDs to actual issues
-        let selectedIssues = jiraService.selectedIssues.compactMap { selectedID in
-            jiraService.issues.first { $0.id == selectedID }
+        let selectedIssues = await MainActor.run {
+            jiraService.selectedIssues.compactMap { selectedID in
+                jiraService.issues.first { $0.id == selectedID }
+            }
         }
+
+        // Fetch full details for selected issues (description, comments, changelog)
+        // Limit to first 3 to avoid too much context
+        var issueDetails: [IssueDetails] = []
+        for issue in selectedIssues.prefix(3) {
+            let result = await jiraService.fetchIssueDetails(issueKey: issue.key)
+            if let details = result.details {
+                issueDetails.append(details)
+            }
+        }
+
+        let filters = await MainActor.run { jiraService.filters }
+        let issues = await MainActor.run { jiraService.issues }
+        let projects = await MainActor.run { Array(jiraService.availableProjects) }
+        let sprints = await MainActor.run { jiraService.availableSprints }
+        let epics = await MainActor.run { Array(jiraService.availableEpics) }
+        let statuses = await MainActor.run { Array(jiraService.availableStatuses) }
+        let resolutions = await MainActor.run { Array(jiraService.availableResolutions) }
 
         return AIContext(
             currentUser: currentUser,
             selectedIssues: selectedIssues,
-            currentFilters: jiraService.filters,
-            visibleIssues: Array(jiraService.issues.prefix(20)), // Top 20 for context
-            availableProjects: Array(jiraService.availableProjects),
-            availableSprints: jiraService.availableSprints,
-            availableEpics: Array(jiraService.availableEpics),
-            availableStatuses: Array(jiraService.availableStatuses),
-            availableResolutions: Array(jiraService.availableResolutions),
+            selectedIssueDetails: issueDetails,
+            currentFilters: filters,
+            visibleIssues: Array(issues.prefix(20)), // Top 20 for context
+            availableProjects: projects,
+            availableSprints: sprints,
+            availableEpics: epics,
+            availableStatuses: statuses,
+            availableResolutions: resolutions,
             lastSearchResults: nil,
             lastCreatedIssue: nil
         )
@@ -147,6 +189,14 @@ class AIService {
         - Visible issues: \(context.visibleIssues.count) issues currently loaded
         - Available sprints: \(context.availableSprints.map { $0.name }.joined(separator: ", "))
         \(context.selectedIssues.isEmpty ? "" : "- SELECTED ISSUES (\(context.selectedIssues.count)): \(describeSelectedIssues(context.selectedIssues))")
+        \(describeSelectedIssueDetails(context.selectedIssueDetails))
+
+        ANSWERING QUESTIONS:
+        When the user asks questions about selected issues (e.g., "what is this about?", "summarize this", "who worked on this?", "what are the comments?"), you should:
+        1. Use the SELECTED ISSUE DETAILS above to answer directly in natural language
+        2. Do NOT use DETAIL: command for simple questions - you already have the information
+        3. Only use DETAIL: if you need more information than what's provided above
+        4. Be conversational and helpful when answering questions
 
         IMPORTANT INSTRUCTIONS:
         You can perform these Jira operations by including special format markers in your response:
@@ -170,9 +220,14 @@ class AIService {
            - labels: Labels (comma-separated)
            Example: CREATE: project=SETI | summary=Fix bug | type=Bug | assignee=\(context.currentUser) | estimate=2h | sprint=current | components=Management Tasks
 
-        3. UPDATE: Update issue fields (summary, description, assignee, priority, labels, components, estimates, sprint, epic, status, resolution)
+        3. UPDATE: Update issue fields (summary, description, assignee, priority, labels, components, estimates, sprint, epic, status, resolution, pcmmaster)
            Format: `UPDATE: <key> | field=value | field2=value2`
            Example: UPDATE: SETI-123 | summary=New title | priority=High | labels=urgent,bug
+
+           PCM MASTER FIELD:
+           - pcmmaster: Set the PCM Master CMDB field (e.g., pcmmaster=Loom, pcmmaster=Slack)
+           - Use "none" to clear the field: pcmmaster=none
+           - The system will search for matching PCM Master entries by name
 
            STATUS UPDATES WITH RESOLUTION:
            When closing/cancelling an issue, ALWAYS use both status and resolution:
@@ -264,6 +319,41 @@ class AIService {
             let assignee = issue.assignee ?? "Unassigned"
             return "\(issue.key) [\(issue.status), \(assignee)]: \(issue.summary)"
         }.joined(separator: "\n  ")
+    }
+
+    private func describeSelectedIssueDetails(_ details: [IssueDetails]) -> String {
+        guard !details.isEmpty else { return "" }
+
+        var result = "\n- SELECTED ISSUE DETAILS:\n"
+
+        for detail in details {
+            let pcmMasterValue = detail.issue.pcmMaster?.label ?? detail.issue.pcmMaster?.objectKey ?? "None"
+            result += """
+
+              \(detail.issue.key): \(detail.issue.summary)
+              Type: \(detail.issue.issueType) | Status: \(detail.issue.status) | Priority: \(detail.issue.priority ?? "None")
+              Assignee: \(detail.issue.assignee ?? "Unassigned") | PCM Master: \(pcmMasterValue)
+            """
+
+            if let description = detail.description, !description.isEmpty {
+                // Truncate very long descriptions
+                let truncated = description.count > 500 ? String(description.prefix(500)) + "..." : description
+                result += "\n  Description: \(truncated)"
+            }
+
+            if !detail.comments.isEmpty {
+                result += "\n  Recent Comments (\(detail.comments.count) total):"
+                // Show last 3 comments
+                for comment in detail.comments.suffix(3) {
+                    let truncatedBody = comment.body.count > 200 ? String(comment.body.prefix(200)) + "..." : comment.body
+                    result += "\n    - \(comment.author): \(truncatedBody)"
+                }
+            }
+
+            result += "\n"
+        }
+
+        return result
     }
 
     // MARK: - Shared Field Validation

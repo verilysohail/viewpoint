@@ -218,7 +218,7 @@ class JiraService: ObservableObject {
                 var queryItems = [
                     URLQueryItem(name: "jql", value: jql),
                     URLQueryItem(name: "maxResults", value: String(maxResults)),
-                    URLQueryItem(name: "fields", value: "summary,status,resolution,assignee,reporter,issuetype,project,priority,created,updated,components,customfield_10014,customfield_10016,customfield_10020,timeoriginalestimate,timespent,timeestimate")
+                    URLQueryItem(name: "fields", value: "summary,status,resolution,assignee,reporter,issuetype,project,priority,created,updated,components,customfield_10014,customfield_10016,customfield_10020,customfield_11920,timeoriginalestimate,timespent,timeestimate")
                 ]
 
                 // Add nextPageToken if we have one (not on first page)
@@ -331,7 +331,7 @@ class JiraService: ObservableObject {
             components.queryItems = [
                 URLQueryItem(name: "jql", value: jql),
                 URLQueryItem(name: "maxResults", value: String(maxResults)),
-                URLQueryItem(name: "fields", value: "summary,status,resolution,assignee,reporter,issuetype,project,priority,created,updated,components,customfield_10014,customfield_10016,customfield_10020,timeoriginalestimate,timespent,timeestimate")
+                URLQueryItem(name: "fields", value: "summary,status,resolution,assignee,reporter,issuetype,project,priority,created,updated,components,customfield_10014,customfield_10016,customfield_10020,customfield_11920,timeoriginalestimate,timespent,timeestimate")
             ]
 
             guard let url = components.url else {
@@ -699,7 +699,7 @@ class JiraService: ObservableObject {
         components.queryItems = [
             URLQueryItem(name: "jql", value: jql),
             URLQueryItem(name: "maxResults", value: "100"),
-            URLQueryItem(name: "fields", value: "summary,status,resolution,assignee,reporter,issuetype,project,priority,created,updated,components,customfield_10014,customfield_10016,customfield_10020,timeoriginalestimate,timespent,timeestimate")
+            URLQueryItem(name: "fields", value: "summary,status,resolution,assignee,reporter,issuetype,project,priority,created,updated,components,customfield_10014,customfield_10016,customfield_10020,customfield_11920,timeoriginalestimate,timespent,timeestimate")
         ]
 
         guard let url = components.url else {
@@ -1218,6 +1218,148 @@ class JiraService: ObservableObject {
         return []
     }
 
+    // MARK: - PCM Master (CMDB) Methods
+
+    /// PCM Master CMDB workspace ID
+    private let pcmMasterWorkspaceId = "637d3251-e89d-4c45-91fd-33267d9b9ff7"
+
+    /// Search PCM Master values from Jira Assets
+    func searchPCMMaster(query: String = "") async -> [(id: String, label: String, objectKey: String)] {
+        var allResults: [(id: String, label: String, objectKey: String)] = []
+        var page = 1
+        var hasMore = true
+
+        // URL encode the AQL query
+        let aqlQuery = "objectType IN objectTypeAndChildren(\"PCM Master\")"
+        guard let encodedQuery = aqlQuery.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else {
+            Logger.shared.error("Failed to encode AQL query for PCM Master")
+            return []
+        }
+
+        while hasMore {
+            let urlString = "https://api.atlassian.com/jsm/assets/workspace/\(pcmMasterWorkspaceId)/v1/aql/objects?qlQuery=\(encodedQuery)&page=\(page)&includeAttributes=false"
+
+            guard let url = URL(string: urlString) else {
+                Logger.shared.error("Invalid URL for PCM Master search")
+                return allResults
+            }
+
+            let request = createRequest(url: url)
+
+            do {
+                let (data, response) = try await URLSession.shared.data(for: request)
+
+                guard let httpResponse = response as? HTTPURLResponse else {
+                    throw URLError(.badServerResponse)
+                }
+
+                if httpResponse.statusCode == 200,
+                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let objectEntries = json["objectEntries"] as? [[String: Any]] {
+
+                    let pageResults = objectEntries.compactMap { entry -> (String, String, String)? in
+                        guard let id = entry["id"] as? String,
+                              let label = entry["label"] as? String else {
+                            // Try id as Int
+                            if let idInt = entry["id"] as? Int,
+                               let label = entry["label"] as? String {
+                                let objectKey = entry["objectKey"] as? String ?? "PCM-\(idInt)"
+                                return (String(idInt), label, objectKey)
+                            }
+                            return nil
+                        }
+                        let objectKey = entry["objectKey"] as? String ?? "PCM-\(id)"
+                        return (id, label, objectKey)
+                    }
+
+                    allResults.append(contentsOf: pageResults)
+
+                    hasMore = (json["hasMoreResults"] as? Bool) ?? false
+                    page += 1
+
+                    Logger.shared.info("Fetched \(pageResults.count) PCM Master entries (page \(page - 1)), hasMore: \(hasMore)")
+                } else {
+                    Logger.shared.error("Failed to parse PCM Master response, status: \(httpResponse.statusCode)")
+                    hasMore = false
+                }
+            } catch {
+                Logger.shared.error("Failed to fetch PCM Master values: \(error)")
+                hasMore = false
+            }
+        }
+
+        // Filter by query if provided
+        if !query.isEmpty {
+            let lowercaseQuery = query.lowercased()
+            return allResults.filter {
+                $0.label.lowercased().contains(lowercaseQuery) ||
+                $0.objectKey.lowercased().contains(lowercaseQuery)
+            }
+        }
+
+        return allResults
+    }
+
+    /// Update PCM Master field for an issue
+    func updatePCMMaster(issueKey: String, objectId: String?) async -> Bool {
+        let urlString = "\(config.jiraBaseURL)/rest/api/3/issue/\(issueKey)"
+
+        guard let url = URL(string: urlString) else {
+            Logger.shared.error("Invalid URL for updating PCM Master")
+            return false
+        }
+
+        var request = createRequest(url: url)
+        request.httpMethod = "PUT"
+
+        let body: [String: Any]
+        if let objectId = objectId {
+            // Use the full format required by Jira Cloud Assets:
+            // workspaceId, id (globalId format), and objectId
+            let globalId = "\(pcmMasterWorkspaceId):\(objectId)"
+            let objectValue: [[String: String]] = [[
+                "workspaceId": pcmMasterWorkspaceId,
+                "id": globalId,
+                "objectId": objectId
+            ]]
+            body = ["fields": ["customfield_11920": objectValue]]
+        } else {
+            body = ["fields": ["customfield_11920": NSNull()]]
+        }
+
+        do {
+            request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+            // Log the actual JSON being sent
+            if let jsonString = String(data: request.httpBody!, encoding: .utf8) {
+                Logger.shared.info("PCM Master update request body: \(jsonString)")
+            }
+            Logger.shared.info("Updating PCM Master for \(issueKey) to objectId: \(objectId ?? "null")")
+
+            let (data, response) = try await URLSession.shared.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw URLError(.badServerResponse)
+            }
+
+            if httpResponse.statusCode == 204 || httpResponse.statusCode == 200 {
+                Logger.shared.info("Successfully updated PCM Master for \(issueKey) (status: \(httpResponse.statusCode))")
+                if let responseBody = String(data: data, encoding: .utf8), !responseBody.isEmpty {
+                    Logger.shared.info("PCM Master update response: \(responseBody)")
+                }
+                return true
+            } else {
+                if let errorMessage = String(data: data, encoding: .utf8) {
+                    Logger.shared.error("Failed to update PCM Master: \(errorMessage)")
+                }
+                return false
+            }
+        } catch {
+            Logger.shared.error("Failed to update PCM Master: \(error)")
+            return false
+        }
+    }
+
     func fetchJQLAutocompleteSuggestions(fieldName: String, query: String = "") async -> [String] {
         // Use Jira's autocomplete API to get all available values for a field
         let encodedQuery = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? query
@@ -1592,6 +1734,46 @@ class JiraService: ObservableObject {
                     }
                 }
 
+            case "pcmmaster", "pcm master", "pcm_master", "customfield_11920":
+                if let pcmValue = value as? String {
+                    if pcmValue.lowercased() == "none" || pcmValue.lowercased() == "null" || pcmValue.isEmpty {
+                        // Clear the field
+                        jiraFields["customfield_11920"] = NSNull()
+                        Logger.shared.info("Clearing PCM Master field")
+                    } else {
+                        // Search for matching PCM Master entry
+                        let pcmEntries = await searchPCMMaster(query: pcmValue)
+                        if let entry = pcmEntries.first(where: { $0.label.lowercased() == pcmValue.lowercased() }) {
+                            // Use the full format required by Jira Cloud Assets
+                            let globalId = "\(pcmMasterWorkspaceId):\(entry.id)"
+                            jiraFields["customfield_11920"] = [[
+                                "workspaceId": pcmMasterWorkspaceId,
+                                "id": globalId,
+                                "objectId": entry.id
+                            ]]
+                            Logger.shared.info("Found PCM Master by exact name '\(pcmValue)': \(entry.label) (ID: \(entry.id))")
+                        } else if let entry = pcmEntries.first(where: { $0.label.lowercased().contains(pcmValue.lowercased()) }) {
+                            let globalId = "\(pcmMasterWorkspaceId):\(entry.id)"
+                            jiraFields["customfield_11920"] = [[
+                                "workspaceId": pcmMasterWorkspaceId,
+                                "id": globalId,
+                                "objectId": entry.id
+                            ]]
+                            Logger.shared.info("Found PCM Master by partial match '\(pcmValue)': \(entry.label) (ID: \(entry.id))")
+                        } else if let entry = pcmEntries.first {
+                            let globalId = "\(pcmMasterWorkspaceId):\(entry.id)"
+                            jiraFields["customfield_11920"] = [[
+                                "workspaceId": pcmMasterWorkspaceId,
+                                "id": globalId,
+                                "objectId": entry.id
+                            ]]
+                            Logger.shared.info("Using first PCM Master result for '\(pcmValue)': \(entry.label) (ID: \(entry.id))")
+                        } else {
+                            Logger.shared.warning("Could not find PCM Master matching: \(pcmValue)")
+                        }
+                    }
+                }
+
             default:
                 Logger.shared.warning("Unknown field: \(key)")
             }
@@ -1902,9 +2084,15 @@ class JiraService: ObservableObject {
     }
 
     func fetchIssueDetails(issueKey: String) async -> (success: Bool, details: IssueDetails?) {
-        let urlString = "\(config.jiraBaseURL)/rest/api/3/issue/\(issueKey)"
+        // Explicitly request customfield_11920 (PCM Master) to ensure it's returned
+        // Use expand parameter to get CMDB object attributes
+        var components = URLComponents(string: "\(config.jiraBaseURL)/rest/api/3/issue/\(issueKey)")!
+        components.queryItems = [
+            URLQueryItem(name: "fields", value: "summary,status,resolution,assignee,reporter,issuetype,project,priority,created,updated,components,description,customfield_10014,customfield_10016,customfield_10020,customfield_11920,timeoriginalestimate,timespent,timeestimate"),
+            URLQueryItem(name: "expand", value: "names,renderedFields")
+        ]
 
-        guard let url = URL(string: urlString) else {
+        guard let url = components.url else {
             Logger.shared.error("Invalid URL for fetching issue details")
             return (false, nil)
         }
@@ -1923,6 +2111,28 @@ class JiraService: ObservableObject {
             Logger.shared.info("Issue details response status: \(httpResponse.statusCode)")
 
             if httpResponse.statusCode == 200 {
+                // Debug: log PCM Master field from response with full JSON details
+                if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let fields = json["fields"] as? [String: Any] {
+                    if let pcmField = fields["customfield_11920"] {
+                        // Log the type and full structure
+                        if let pcmArray = pcmField as? [[String: Any]] {
+                            Logger.shared.info("PCM Master field is array with \(pcmArray.count) items")
+                            for (index, item) in pcmArray.enumerated() {
+                                Logger.shared.info("  PCM Master[\(index)]: \(item)")
+                            }
+                        } else if let pcmDict = pcmField as? [String: Any] {
+                            Logger.shared.info("PCM Master field is dict: \(pcmDict)")
+                        } else if pcmField is NSNull {
+                            Logger.shared.info("PCM Master field is NSNull")
+                        } else {
+                            Logger.shared.info("PCM Master field raw value (type: \(type(of: pcmField))): \(pcmField)")
+                        }
+                    } else {
+                        Logger.shared.info("PCM Master field key not present in response")
+                    }
+                }
+
                 let decoder = JSONDecoder()
                 let issue = try decoder.decode(JiraIssue.self, from: data)
 
@@ -1967,7 +2177,7 @@ class JiraService: ObservableObject {
         components.queryItems = [
             URLQueryItem(name: "jql", value: jql),
             URLQueryItem(name: "maxResults", value: "50"),
-            URLQueryItem(name: "fields", value: "summary,status,resolution,assignee,reporter,issuetype,project,priority,created,updated,components,customfield_10014,customfield_10016,customfield_10020,timeoriginalestimate,timespent,timeestimate")
+            URLQueryItem(name: "fields", value: "summary,status,resolution,assignee,reporter,issuetype,project,priority,created,updated,components,customfield_10014,customfield_10016,customfield_10020,customfield_11920,timeoriginalestimate,timespent,timeestimate")
         ]
 
         guard let url = components.url else {

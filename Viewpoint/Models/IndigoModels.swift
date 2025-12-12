@@ -76,6 +76,7 @@ enum AIModel: String, CaseIterable, Identifiable {
 struct AIContext {
     let currentUser: String
     let selectedIssues: [JiraIssue]
+    let selectedIssueDetails: [IssueDetails]  // Full details for selected issues (description, comments, etc.)
     let currentFilters: IssueFilters
     let visibleIssues: [JiraIssue]
     let availableProjects: [String]
