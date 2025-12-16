@@ -650,6 +650,134 @@ class IndigoViewModel: ObservableObject {
                     status: .error
                 ))
             }
+
+        case .sprintLookup(let query, let projectKey):
+            addMessage(Message(
+                text: "🔍 Looking up sprint information: \(query)",
+                sender: .system
+            ))
+
+            // Get available sprints from JiraService
+            let sprints = await MainActor.run { jiraService.availableSprints }
+
+            // Filter by project if specified
+            let searchSprints = sprints
+            if let projectKey = projectKey {
+                // Filter sprints that might be associated with the project
+                // Note: Sprints don't have direct project association in the model,
+                // but we can filter based on active project context
+                Logger.shared.info("SPRINT_LOOKUP: Filtering for project \(projectKey)")
+            }
+
+            // Search for matching sprints based on query
+            let queryLower = query.lowercased()
+            var matchingSprints: [JiraSprint] = []
+
+            // Check for specific sprint name or ID in query
+            for sprint in searchSprints {
+                let nameLower = sprint.name.lowercased()
+
+                // Match by name
+                if nameLower.contains(queryLower) || queryLower.contains(nameLower) {
+                    matchingSprints.append(sprint)
+                    continue
+                }
+
+                // Match by ID if query contains a number
+                if queryLower.contains("\(sprint.id)") {
+                    matchingSprints.append(sprint)
+                    continue
+                }
+
+                // Match by state (active, future, closed)
+                if queryLower.contains("active") && sprint.state.lowercased() == "active" {
+                    matchingSprints.append(sprint)
+                    continue
+                }
+                if queryLower.contains("future") && sprint.state.lowercased() == "future" {
+                    matchingSprints.append(sprint)
+                    continue
+                }
+                if queryLower.contains("closed") && sprint.state.lowercased() == "closed" {
+                    matchingSprints.append(sprint)
+                    continue
+                }
+                if queryLower.contains("current") && sprint.state.lowercased() == "active" {
+                    matchingSprints.append(sprint)
+                    continue
+                }
+
+                // Match by date if sprint has dates
+                if let startDate = sprint.startDate, let endDate = sprint.endDate {
+                    // Simple date matching - check if query mentions dates that overlap with sprint
+                    // Look for month names in query
+                    let months = ["january", "february", "march", "april", "may", "june",
+                                  "july", "august", "september", "october", "november", "december"]
+                    for (index, month) in months.enumerated() {
+                        if queryLower.contains(month) {
+                            let monthNum = index + 1
+                            let monthStr = String(format: "%02d", monthNum)
+                            // Check if sprint dates include this month
+                            if startDate.contains("-\(monthStr)-") || endDate.contains("-\(monthStr)-") {
+                                matchingSprints.append(sprint)
+                                break
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Remove duplicates
+            let uniqueSprints = Array(Set(matchingSprints.map { $0.id })).compactMap { id in
+                matchingSprints.first { $0.id == id }
+            }
+
+            if uniqueSprints.isEmpty {
+                // If no matches found, show all available sprints
+                if searchSprints.isEmpty {
+                    addMessage(Message(
+                        text: "📋 No sprints found in the current context. Try selecting a project first.",
+                        sender: .system,
+                        status: .warning
+                    ))
+                } else {
+                    var message = "📋 No sprints matching '\(query)' found. Here are all available sprints:\n\n"
+                    for sprint in searchSprints.prefix(10) {
+                        message += "• **\(sprint.name)** (ID: \(sprint.id))\n"
+                        message += "  State: \(sprint.state)"
+                        if let start = sprint.startDate, let end = sprint.endDate {
+                            message += " | \(start) to \(end)"
+                        }
+                        message += "\n"
+                    }
+                    if searchSprints.count > 10 {
+                        message += "\n...and \(searchSprints.count - 10) more sprints"
+                    }
+                    addMessage(Message(
+                        text: message,
+                        sender: .system,
+                        status: .success
+                    ))
+                }
+            } else {
+                var message = "📋 Found \(uniqueSprints.count) sprint(s) matching '\(query)':\n\n"
+                for sprint in uniqueSprints {
+                    message += "• **\(sprint.name)** (ID: \(sprint.id))\n"
+                    message += "  State: \(sprint.state)"
+                    if let start = sprint.startDate, let end = sprint.endDate {
+                        message += " | \(start) to \(end)"
+                    }
+                    if let goal = sprint.goal, !goal.isEmpty {
+                        message += "\n  Goal: \(goal)"
+                    }
+                    message += "\n"
+                }
+                addMessage(Message(
+                    text: message,
+                    sender: .system,
+                    status: .success
+                ))
+            }
         }
     }
 

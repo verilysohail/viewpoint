@@ -5,6 +5,7 @@ struct IndigoView: View {
     @EnvironmentObject var jiraService: JiraService
     @Environment(\.textSizeMultiplier) var textSizeMultiplier
     @Environment(\.openWindow) private var openWindow
+    @FocusState private var isInputFocused: Bool
 
     // Computed property for selected issues
     private var selectedIssues: [JiraIssue] {
@@ -238,8 +239,19 @@ struct IndigoView: View {
                     .padding(.horizontal, 12)
                     .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
                     .cornerRadius(8)
+                    .focused($isInputFocused)
                     .onSubmit {
                         viewModel.sendMessage()
+                        // Refocus after sending
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                            isInputFocused = true
+                        }
+                    }
+                    .onAppear {
+                        // Set focus when view appears
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                            isInputFocused = true
+                        }
                     }
 
                 // Send button

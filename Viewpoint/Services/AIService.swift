@@ -187,7 +187,8 @@ class AIService {
         - Available resolutions: \(context.availableResolutions.joined(separator: ", "))
         - Active filters: \(describeFilters(context.currentFilters))
         - Visible issues: \(context.visibleIssues.count) issues currently loaded
-        - Available sprints: \(context.availableSprints.map { $0.name }.joined(separator: ", "))
+        - Available sprints (with dates):
+          \(context.availableSprints.map { "\($0.name) (ID: \($0.id), \($0.startDate ?? "no start") - \($0.endDate ?? "no end"), state: \($0.state))" }.joined(separator: "\n          "))
         \(context.selectedIssues.isEmpty ? "" : "- SELECTED ISSUES (\(context.selectedIssues.count)): \(describeSelectedIssues(context.selectedIssues))")
         \(describeSelectedIssueDetails(context.selectedIssueDetails))
 
@@ -284,6 +285,22 @@ class AIService {
            Returns available status transitions and their required fields (like resolution values)
            IMPORTANT: Use this BEFORE updating status when user mentions closing/cancelling with specific resolutions
            This tells you exactly which transitions are available and what resolution values you can use
+
+        13. SPRINT: Look up sprint information (NOT via JQL - sprints are not issues!)
+           Format: `SPRINT: <query>`
+           Examples:
+           - SPRINT: find sprint for first week of January
+           - SPRINT: what sprints are active in SETI?
+           - SPRINT: show me Sprint 42 details
+           - SPRINT: what is the ID of the current sprint?
+           The system will search available sprints and return matching sprint details inline.
+
+        CRITICAL - SPRINTS ARE NOT ISSUES:
+        - Sprints CANNOT be found using JQL search - JQL returns issues only
+        - Viewpoint cannot display sprints in the issue list
+        - When users ask about sprints (find a sprint, sprint ID, sprint dates), use the SPRINT: command above
+        - You CAN still assign issues to sprints using UPDATE: issueKey | sprint=SprintName
+        - The available sprints with their IDs and dates are listed above in CURRENT CONTEXT
 
         IMPORTANT:
         - Always explain what you're doing in plain language alongside the operation
@@ -744,6 +761,13 @@ class AIService {
             if trimmed.hasPrefix("GET_TRANSITIONS:") {
                 let issueKey = trimmed.replacingOccurrences(of: "GET_TRANSITIONS:", with: "").trimmingCharacters(in: .whitespaces)
                 intents.append(.getTransitions(issueKey: issueKey))
+                continue
+            }
+
+            // Sprint lookup
+            if trimmed.hasPrefix("SPRINT:") {
+                let query = trimmed.replacingOccurrences(of: "SPRINT:", with: "").trimmingCharacters(in: .whitespaces)
+                intents.append(.sprintLookup(query: query, projectKey: nil))
                 continue
             }
         }

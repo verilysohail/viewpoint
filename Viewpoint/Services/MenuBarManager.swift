@@ -82,12 +82,18 @@ class MenuBarManager: NSObject, ObservableObject {
             // Check if Enter/Return was pressed
             if event.keyCode == 36 || event.keyCode == 76 { // 36 = Return, 76 = Enter
                 // Directly trigger the create issue action
-                if let vm = self.viewModel {
+                if let vm = self.viewModel, !vm.summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     Task { @MainActor in
                         vm.createIssue()
                     }
+                    return nil // Consume the event only if we handled it
                 }
-                return nil // Consume the event
+            }
+
+            // Check if Escape was pressed
+            if event.keyCode == 53 { // Escape
+                popover.close()
+                return nil
             }
 
             return event
@@ -99,6 +105,23 @@ class MenuBarManager: NSObject, ObservableObject {
             NSEvent.removeMonitor(monitor)
             eventMonitor = nil
         }
+    }
+
+    /// Recursively find the first NSTextField in a view hierarchy
+    private func findTextField(in view: NSView?) -> NSTextField? {
+        guard let view = view else { return nil }
+
+        if let textField = view as? NSTextField, textField.isEditable {
+            return textField
+        }
+
+        for subview in view.subviews {
+            if let found = findTextField(in: subview) {
+                return found
+            }
+        }
+
+        return nil
     }
 
     @objc private func togglePopover() {
@@ -115,14 +138,20 @@ class MenuBarManager: NSObject, ObservableObject {
                 if popover.isShown {
                     popover.close()
                 } else {
+                    // Start monitoring BEFORE showing popover to catch all key events
+                    self.startMonitoringKeyEvents()
                     popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
                     // Focus the popover and make it the first responder
                     DispatchQueue.main.async {
                         if let popoverWindow = popover.contentViewController?.view.window {
                             popoverWindow.makeKey()
-                            popoverWindow.makeFirstResponder(popover.contentViewController?.view)
+                            // Find and focus the text field inside the popover
+                            if let textField = self.findTextField(in: popover.contentViewController?.view) {
+                                popoverWindow.makeFirstResponder(textField)
+                            } else {
+                                popoverWindow.makeFirstResponder(popover.contentViewController?.view)
+                            }
                         }
-                        self.startMonitoringKeyEvents()
                     }
                 }
             }
@@ -150,15 +179,21 @@ class MenuBarManager: NSObject, ObservableObject {
     }
 
     @objc private func showQuickCreate() {
-        guard let button = statusItem?.button else { return }
-        popover?.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        guard let button = statusItem?.button, let popover = popover else { return }
+        // Start monitoring BEFORE showing popover to catch all key events
+        self.startMonitoringKeyEvents()
+        popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         // Focus the popover and make it the first responder
         DispatchQueue.main.async {
-            if let popoverWindow = self.popover?.contentViewController?.view.window {
+            if let popoverWindow = popover.contentViewController?.view.window {
                 popoverWindow.makeKey()
-                popoverWindow.makeFirstResponder(self.popover?.contentViewController?.view)
+                // Find and focus the text field inside the popover
+                if let textField = self.findTextField(in: popover.contentViewController?.view) {
+                    popoverWindow.makeFirstResponder(textField)
+                } else {
+                    popoverWindow.makeFirstResponder(popover.contentViewController?.view)
+                }
             }
-            self.startMonitoringKeyEvents()
         }
     }
 
