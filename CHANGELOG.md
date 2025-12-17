@@ -2,6 +2,40 @@
 
 All notable changes to Viewpoint will be documented in this file.
 
+## [2.2.1] - 2025-12-16
+
+### Added
+
+**🔍 Indigo Sprint Lookup**
+- New `SPRINT:` command for Indigo to look up sprint information directly
+- Sprints can now be queried by name, ID, state (active/future/closed), or date
+- Returns sprint details inline including ID, name, dates, and goal
+- System prompt now explains that sprints cannot be found via JQL (JQL returns issues only)
+
+**📋 JQL Builder Reporter Support**
+- Reporter field now available in JQL autocomplete
+- Supports all user operators: =, !=, IN, NOT IN, WAS, WAS IN, CHANGED
+- Shows available reporters from loaded issues
+
+**🏢 PCM Master CMDB Field**
+- New PCM Master field support with lookup and edit capability
+- Searchable selector for CMDB entries
+
+### Fixed
+
+**⌨️ Enter Key Reliability**
+- Replaced unreliable SwiftUI `.onSubmit` with custom `SubmittableTextField` component
+- Uses NSTextField with proper NSEvent monitoring for reliable Enter/Return handling
+- Text field only responds to Enter when it is the actual first responder
+- Fixed across Indigo chat, Menu Bar Quick Create, and toolbar Quick Create
+
+**🪟 Indigo Window Focus**
+- Fixed issue where Enter key wasn't working because focus was on the window behind Indigo
+- Indigo window now properly becomes the key window when opened
+- Text field automatically receives focus on window appear
+
+---
+
 ## [2.2] - 2025-12-11
 
 ### Added
