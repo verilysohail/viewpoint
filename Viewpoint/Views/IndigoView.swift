@@ -5,7 +5,6 @@ struct IndigoView: View {
     @EnvironmentObject var jiraService: JiraService
     @Environment(\.textSizeMultiplier) var textSizeMultiplier
     @Environment(\.openWindow) private var openWindow
-    @FocusState private var isInputFocused: Bool
 
     // Computed property for selected issues
     private var selectedIssues: [JiraIssue] {
@@ -231,28 +230,19 @@ struct IndigoView: View {
                 .buttonStyle(.plain)
                 .help("Voice input (Phase 2)")
 
-                // Text input
-                TextField("Type or speak your command...", text: $viewModel.inputText)
-                    .textFieldStyle(.plain)
-                    .font(.body)
-                    .padding(.vertical, 8)
-                    .padding(.horizontal, 12)
-                    .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
-                    .cornerRadius(8)
-                    .focused($isInputFocused)
-                    .onSubmit {
+                // Text input - using custom NSTextField for reliable Enter key handling
+                SubmittableTextField(
+                    "Type or speak your command...",
+                    text: $viewModel.inputText,
+                    onSubmit: {
                         viewModel.sendMessage()
-                        // Refocus after sending
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                            isInputFocused = true
-                        }
-                    }
-                    .onAppear {
-                        // Set focus when view appears
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                            isInputFocused = true
-                        }
-                    }
+                    },
+                    font: .systemFont(ofSize: NSFont.systemFontSize),
+                    backgroundColor: NSColor.controlBackgroundColor.withAlphaComponent(0.5),
+                    focusOnAppear: true
+                )
+                .frame(height: 36)
+                .cornerRadius(8)
 
                 // Send button
                 Button(action: { viewModel.sendMessage() }) {

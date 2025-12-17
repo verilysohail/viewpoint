@@ -80,7 +80,6 @@ class MenuBarQuickCreateViewModel: ObservableObject {
 
 struct MenuBarQuickCreateView: View {
     @ObservedObject var viewModel: MenuBarQuickCreateViewModel
-    @FocusState private var isSummaryFocused: Bool
 
     init(viewModel: MenuBarQuickCreateViewModel) {
         self.viewModel = viewModel
@@ -109,16 +108,20 @@ struct MenuBarQuickCreateView: View {
             }
             .padding(.bottom, 4)
 
-            // Text field
-            TextField("Enter issue summary...", text: $viewModel.summary)
-                .textFieldStyle(.roundedBorder)
-                .focused($isSummaryFocused)
-                .onSubmit {
+            // Text field - using custom NSTextField for reliable Enter key handling
+            SubmittableTextField(
+                "Enter issue summary...",
+                text: $viewModel.summary,
+                onSubmit: {
                     viewModel.createIssue()
-                }
-                .onExitCommand {
+                },
+                onEscape: {
                     viewModel.dismissAction()
-                }
+                },
+                isBordered: true,
+                focusOnAppear: true
+            )
+            .frame(height: 22)
 
             // Project info or error
             if !viewModel.defaultProject.isEmpty {
@@ -177,8 +180,5 @@ struct MenuBarQuickCreateView: View {
         }
         .padding(12)
         .frame(width: 320)
-        .onAppear {
-            isSummaryFocused = true
-        }
     }
 }

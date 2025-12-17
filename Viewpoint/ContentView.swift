@@ -1618,7 +1618,6 @@ struct QuickCreateIssueView: View {
     @State private var summary: String = ""
     @State private var isCreating: Bool = false
     @State private var errorMessage: String?
-    @FocusState private var isSummaryFocused: Bool
 
     private var canCreate: Bool {
         !summary.isEmpty && !defaultProject.isEmpty
@@ -1626,15 +1625,22 @@ struct QuickCreateIssueView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            TextField("Enter issue summary...", text: $summary)
-                .textFieldStyle(.roundedBorder)
-                .focused($isSummaryFocused)
-                .onSubmit {
+            // Text field - using custom NSTextField for reliable Enter key handling
+            SubmittableTextField(
+                "Enter issue summary...",
+                text: $summary,
+                onSubmit: {
                     if canCreate {
                         createIssue()
                     }
-                }
-                .frame(width: 350)
+                },
+                onEscape: {
+                    isPresented = false
+                },
+                isBordered: true,
+                focusOnAppear: true
+            )
+            .frame(width: 350, height: 22)
 
             if !defaultProject.isEmpty {
                 HStack(spacing: 4) {
@@ -1668,9 +1674,6 @@ struct QuickCreateIssueView: View {
             }
         }
         .padding(12)
-        .onAppear {
-            isSummaryFocused = true
-        }
     }
 
     private func createIssue() {
