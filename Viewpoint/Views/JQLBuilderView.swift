@@ -221,7 +221,7 @@ struct JQLBuilderView: View {
                     )
                 }
 
-        case "assignee", "status", "type", "issuetype", "component", "components", "priority":
+        case "assignee", "reporter", "status", "type", "issuetype", "component", "components", "priority":
             let apiSuggestions = await jiraService.fetchJQLAutocompleteSuggestions(
                 fieldName: field.name,
                 query: currentInput
@@ -503,6 +503,19 @@ struct JQLBuilderView: View {
                     JQLSuggestion(
                         text: "\"\(assignee)\"",
                         displayText: assignee,
+                        type: .value,
+                        description: nil
+                    )
+                }
+
+        case "reporter":
+            suggestions += jiraService.availableReporters
+                .filter { currentInput.isEmpty || $0.lowercased().contains(currentInput) }
+                .sorted()
+                .map { reporter in
+                    JQLSuggestion(
+                        text: "\"\(reporter)\"",
+                        displayText: reporter,
                         type: .value,
                         description: nil
                     )

@@ -22,6 +22,7 @@ class JiraService: ObservableObject {
     // Available filter options (populated from current issue results)
     @Published var availableStatuses: Set<String> = []
     @Published var availableAssignees: Set<String> = []
+    @Published var availableReporters: Set<String> = []
     @Published var availableIssueTypes: Set<String> = []
     @Published var availableProjects: Set<String> = []
     @Published var availableEpics: Set<String> = []
@@ -780,6 +781,7 @@ class JiraService: ObservableObject {
     private func updateAvailableFilters() {
         availableStatuses = Set(issues.map { $0.status })
         availableAssignees = Set(issues.compactMap { $0.assignee })
+        availableReporters = Set(issues.compactMap { $0.reporter })
         availableIssueTypes = Set(issues.map { $0.issueType })
 
         // Merge epics from issues with previously seen epics (don't replace)

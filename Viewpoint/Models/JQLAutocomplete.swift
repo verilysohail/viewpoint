@@ -56,6 +56,7 @@ struct JQLField {
         JQLField(name: "status", aliases: [], operators: ["=", "!=", "IN", "NOT IN", "WAS", "WAS IN", "CHANGED"], valueType: .list, description: "Issue status"),
         JQLField(name: "statusCategory", aliases: [], operators: ["=", "!=", "IN", "NOT IN"], valueType: .list, description: "Status category (To Do, In Progress, Done)"),
         JQLField(name: "assignee", aliases: [], operators: ["=", "!=", "IN", "NOT IN", "WAS", "WAS IN", "CHANGED"], valueType: .user, description: "Issue assignee"),
+        JQLField(name: "reporter", aliases: [], operators: ["=", "!=", "IN", "NOT IN", "WAS", "WAS IN", "CHANGED"], valueType: .user, description: "Issue reporter/creator"),
         JQLField(name: "type", aliases: ["issuetype"], operators: ["=", "!=", "IN", "NOT IN"], valueType: .list, description: "Issue type"),
         JQLField(name: "priority", aliases: [], operators: ["=", "!=", "IN", "NOT IN"], valueType: .list, description: "Issue priority"),
         JQLField(name: "sprint", aliases: [], operators: ["=", "!=", "IN", "NOT IN"], valueType: .number, description: "Sprint ID"),
