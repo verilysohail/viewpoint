@@ -61,9 +61,7 @@ struct SubmittableTextField: NSViewRepresentable {
 
         // Focus on appear if requested
         if focusOnAppear {
-            DispatchQueue.main.async {
-                textField.window?.makeFirstResponder(textField)
-            }
+            textField.shouldFocusOnAppear = true
         }
 
         return textField
@@ -108,7 +106,9 @@ struct SubmittableTextField: NSViewRepresentable {
 class SubmittableNSTextField: NSTextField {
     var onSubmit: (() -> Void)?
     var onEscape: (() -> Void)?
+    var shouldFocusOnAppear: Bool = false
     private var eventMonitor: Any?
+    private var hasFocused: Bool = false
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
@@ -120,7 +120,7 @@ class SubmittableNSTextField: NSTextField {
         }
 
         // Add local event monitor when we're in a window
-        if window != nil {
+        if let window = window {
             eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
                 guard let self = self else { return event }
 
@@ -141,6 +141,17 @@ class SubmittableNSTextField: NSTextField {
                 }
 
                 return event
+            }
+
+            // Focus the text field if requested (and not already done)
+            if shouldFocusOnAppear && !hasFocused {
+                hasFocused = true
+                DispatchQueue.main.async { [weak self] in
+                    guard let self = self, let window = self.window else { return }
+                    // Make the window key first, then focus the text field
+                    window.makeKey()
+                    window.makeFirstResponder(self)
+                }
             }
         }
     }
