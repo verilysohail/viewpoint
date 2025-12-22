@@ -3003,6 +3003,45 @@ class JiraService: ObservableObject {
         return nil
     }
 
+    /// Fetch all components for a specific project from Jira API
+    func fetchProjectComponents(projectKey: String) async -> (success: Bool, components: [JiraComponent]) {
+        Logger.shared.info("Fetching components for project: \(projectKey)")
+
+        guard let url = URL(string: "\(config.jiraBaseURL)/rest/api/3/project/\(projectKey)/components") else {
+            Logger.shared.error("Invalid URL for fetching project components")
+            return (false, [])
+        }
+
+        let request = createRequest(url: url)
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+
+            if let httpResponse = response as? HTTPURLResponse {
+                Logger.shared.info("Components response status: \(httpResponse.statusCode)")
+
+                if httpResponse.statusCode == 200 {
+                    let decoder = JSONDecoder()
+                    let components = try decoder.decode([JiraComponent].self, from: data)
+                    Logger.shared.info("Successfully fetched \(components.count) components for \(projectKey)")
+                    return (true, components)
+                } else if httpResponse.statusCode == 404 {
+                    Logger.shared.warning("Project '\(projectKey)' not found")
+                    return (false, [])
+                } else {
+                    if let errorBody = String(data: data, encoding: .utf8) {
+                        Logger.shared.error("Error fetching components: \(errorBody)")
+                    }
+                    return (false, [])
+                }
+            }
+        } catch {
+            Logger.shared.error("Failed to fetch project components: \(error)")
+        }
+
+        return (false, [])
+    }
+
     // MARK: - Helper Functions
 
     private func stripHTMLTags(from string: String) -> String {

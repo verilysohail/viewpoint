@@ -778,6 +778,47 @@ class IndigoViewModel: ObservableObject {
                     status: .success
                 ))
             }
+
+        case .componentLookup(let projectKey):
+            addMessage(Message(
+                text: "🔍 Looking up components for project \(projectKey)...",
+                sender: .system
+            ))
+
+            let result = await jiraService.fetchProjectComponents(projectKey: projectKey)
+
+            if result.success {
+                if result.components.isEmpty {
+                    addMessage(Message(
+                        text: "📋 No components found for project \(projectKey).",
+                        sender: .system,
+                        status: .warning
+                    ))
+                } else {
+                    var message = "📋 Components for project \(projectKey) (\(result.components.count) total):\n\n"
+                    for component in result.components {
+                        message += "• **\(component.name)**"
+                        if let description = component.description, !description.isEmpty {
+                            message += "\n  \(description)"
+                        }
+                        if let lead = component.lead, let leadName = lead.displayName {
+                            message += "\n  Lead: \(leadName)"
+                        }
+                        message += "\n"
+                    }
+                    addMessage(Message(
+                        text: message,
+                        sender: .system,
+                        status: .success
+                    ))
+                }
+            } else {
+                addMessage(Message(
+                    text: "❌ Failed to fetch components for project \(projectKey). Make sure the project key is correct.",
+                    sender: .system,
+                    status: .error
+                ))
+            }
         }
     }
 

@@ -111,6 +111,7 @@ struct AIResponse {
         case showIssueDetail(issueKey: String)
         case getTransitions(issueKey: String)
         case sprintLookup(query: String, projectKey: String?)
+        case componentLookup(projectKey: String)
     }
 
     var estimatedCost: Double {

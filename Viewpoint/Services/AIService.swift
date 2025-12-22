@@ -324,6 +324,14 @@ class AIService {
         - You CAN still assign issues to sprints using UPDATE: issueKey | sprint=SprintName
         - The available sprints with their IDs and dates are listed above in CURRENT CONTEXT
 
+        14. COMPONENTS: Look up available components for a project
+           Format: `COMPONENTS: <projectKey>`
+           Examples:
+           - COMPONENTS: SETI
+           - COMPONENTS: PROJ
+           Returns all components configured for the project, including their descriptions and leads.
+           Use this when users ask "what components are available for X?" or "show me components in X"
+
         IMPORTANT:
         - Always explain what you're doing in plain language alongside the operation
         - You can update multiple fields in one UPDATE command
@@ -790,6 +798,13 @@ class AIService {
             if trimmed.hasPrefix("SPRINT:") {
                 let query = trimmed.replacingOccurrences(of: "SPRINT:", with: "").trimmingCharacters(in: .whitespaces)
                 intents.append(.sprintLookup(query: query, projectKey: nil))
+                continue
+            }
+
+            // Component lookup
+            if trimmed.hasPrefix("COMPONENTS:") {
+                let projectKey = trimmed.replacingOccurrences(of: "COMPONENTS:", with: "").trimmingCharacters(in: .whitespaces)
+                intents.append(.componentLookup(projectKey: projectKey))
                 continue
             }
         }

@@ -306,6 +306,22 @@ struct ComponentField: Codable, Hashable {
     let name: String
 }
 
+/// Full component details from project components API
+struct JiraComponent: Codable, Identifiable {
+    let id: String
+    let name: String
+    let description: String?
+    let lead: ComponentLead?
+    let assigneeType: String?
+    let project: String?
+    let projectId: Int?
+
+    struct ComponentLead: Codable {
+        let displayName: String?
+        let emailAddress: String?
+    }
+}
+
 // MARK: - Sprint Models
 
 struct JiraSprint: Codable, Identifiable {
