@@ -170,6 +170,29 @@ class AIService {
     }
 
     private func buildSystemPrompt(context: AIContext) -> String {
+        // Build the selected issues section with strong emphasis
+        let selectedIssuesSection: String
+        if !context.selectedIssues.isEmpty {
+            let issueKeys = context.selectedIssues.map { $0.key }.joined(separator: ", ")
+            selectedIssuesSection = """
+
+        ⚠️ CURRENTLY SELECTED ISSUES (CRITICAL - USE THESE FOR OPERATIONS):
+        The user has \(context.selectedIssues.count) issue(s) currently selected: \(issueKeys)
+
+        IMPORTANT RULES FOR SELECTED ISSUES:
+        1. When the user says "this", "it", "the issue", "these", "them", "try again", "retry", or asks to perform any action without explicitly specifying an issue key, ALWAYS use: \(issueKeys)
+        2. IGNORE any issue keys mentioned in the conversation history above - the user may have changed their selection
+        3. The selected issues shown here are the CURRENT selection and take priority over everything else
+        4. If the user previously worked on a different issue (e.g., SETI-1063) but now has \(issueKeys) selected, use \(issueKeys)
+
+        Selected Issue Details:
+        \(describeSelectedIssues(context.selectedIssues))
+        \(describeSelectedIssueDetails(context.selectedIssueDetails))
+        """
+        } else {
+            selectedIssuesSection = ""
+        }
+
         return """
         You are Indigo, an AI assistant for Jira integrated into Viewpoint, a macOS Jira client.
 
@@ -179,6 +202,7 @@ class AIService {
         3. Create new issues
         4. Log work on issues
         5. Provide summaries and insights
+        \(selectedIssuesSection)
 
         CURRENT CONTEXT:
         - Current user: \(context.currentUser)
@@ -189,8 +213,6 @@ class AIService {
         - Visible issues: \(context.visibleIssues.count) issues currently loaded
         - Available sprints (with dates):
           \(context.availableSprints.map { "\($0.name) (ID: \($0.id), \($0.startDate ?? "no start") - \($0.endDate ?? "no end"), state: \($0.state))" }.joined(separator: "\n          "))
-        \(context.selectedIssues.isEmpty ? "" : "- SELECTED ISSUES (\(context.selectedIssues.count)): \(describeSelectedIssues(context.selectedIssues))")
-        \(describeSelectedIssueDetails(context.selectedIssueDetails))
 
         ANSWERING QUESTIONS:
         When the user asks questions about selected issues (e.g., "what is this about?", "summarize this", "who worked on this?", "what are the comments?"), you should:
