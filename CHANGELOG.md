@@ -2,6 +2,47 @@
 
 All notable changes to Viewpoint will be documented in this file.
 
+## [2.2.5] - 2025-12-22
+
+### Added
+
+**🧩 Capability Abstraction Layer (Indigo Phase 1)**
+- New Tool/Capability protocol architecture for AI action execution
+- CapabilityRegistry singleton manages 15 registered Jira tools
+- Foundation for future MCP integration and standalone Indigo app
+- Tools: search_issues, create_issue, update_issue, log_work, change_status, add_comment, assign_issue, get_components, update_classification, update_pcm, delete_issue, add_watcher, link_issues, get_transitions, fetch_changelog
+
+**📋 Request Classification Field**
+- New cascading select field support in Issue Detail view
+- Two-column popover UI for parent/child category selection
+- Natural language support via Indigo: "Classify this as something related to Atlassian"
+- Multi-turn selection flow with numbered options
+
+**🔍 Component Lookup for Indigo**
+- Ask Indigo "What components are available for PROJECT?"
+- Returns list of project components for reference
+
+**📝 PCM Master Natural Language Support**
+- Set PCM Master field via Indigo: "Set PCM to something related to keyword"
+- Multi-turn selection flow matching Request Classification pattern
+
+### Fixed
+
+**🎯 Indigo Selected Issues Priority**
+- Indigo now correctly prioritizes currently selected issues over conversation history
+- Fixes issue where AI would operate on wrong issue mentioned earlier in chat
+
+**🔍 JQL Assignee Search**
+- Fixed search returning 0 results when using assignee autocomplete
+- Now extracts email from "Display Name - email@domain" format for JQL queries
+
+**📜 Log Rotation**
+- Lowered rotation threshold from 10MB to 1MB
+- Added rotation check on app startup (not just during runtime)
+- Reduced kept files from 5 to 3 (max ~4MB total log storage)
+
+---
+
 ## [2.2.1] - 2025-12-16
 
 ### Added
