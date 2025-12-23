@@ -332,6 +332,42 @@ class AIService {
            Returns all components configured for the project, including their descriptions and leads.
            Use this when users ask "what components are available for X?" or "show me components in X"
 
+        15. CLASSIFY: Search and set Request Classification (cascading select field)
+           This is a TWO-STEP process:
+           Step 1 - Search: `CLASSIFY: <issueKey> | <search query>`
+           Example: CLASSIFY: SETI-123 | software
+           This searches for classification options matching the query and presents numbered options.
+
+           Step 2 - Select: `SELECT_CLASSIFICATION: <issueKey> | <option number>`
+           Example: SELECT_CLASSIFICATION: SETI-123 | 2
+           When the user says "1", "option 1", "go with 1", "the first one", etc., use this to select.
+
+           Use this when users say things like:
+           - "classify this as software related"
+           - "set the classification to something about hardware"
+           - "mark this as a network issue"
+
+        16. PCM: Search and set PCM Master (CMDB field)
+           This is a TWO-STEP process:
+           Step 1 - Search: `PCM: <issueKey> | <search query>`
+           Example: PCM: SETI-123 | slack
+           This searches for PCM Master options matching the query and presents numbered options.
+
+           Step 2 - Select: `SELECT_PCM: <issueKey> | <option number>`
+           Example: SELECT_PCM: SETI-123 | 1
+           When the user says "1", "option 1", "go with 1", "the first one", etc., use this to select.
+
+           Use this when users say things like:
+           - "set PCM to Slack"
+           - "link this to Atlassian"
+           - "associate with Loom"
+
+        MULTI-TURN SELECTION:
+        When you present numbered options and the user responds with just a number or "option X" or "go with X":
+        - For classification: use SELECT_CLASSIFICATION with the stored issue key and option number
+        - For PCM: use SELECT_PCM with the stored issue key and option number
+        The system remembers which issue and options were presented, so you just need to pass the number.
+
         IMPORTANT:
         - Always explain what you're doing in plain language alongside the operation
         - You can update multiple fields in one UPDATE command
@@ -805,6 +841,52 @@ class AIService {
             if trimmed.hasPrefix("COMPONENTS:") {
                 let projectKey = trimmed.replacingOccurrences(of: "COMPONENTS:", with: "").trimmingCharacters(in: .whitespaces)
                 intents.append(.componentLookup(projectKey: projectKey))
+                continue
+            }
+
+            // Classification lookup: CLASSIFY: ISSUE-123 | query
+            if trimmed.hasPrefix("CLASSIFY:") {
+                let content = trimmed.replacingOccurrences(of: "CLASSIFY:", with: "").trimmingCharacters(in: .whitespaces)
+                let parts = content.components(separatedBy: "|").map { $0.trimmingCharacters(in: .whitespaces) }
+                if parts.count >= 2 {
+                    let issueKey = parts[0]
+                    let query = parts[1]
+                    intents.append(.classificationLookup(issueKey: issueKey, query: query))
+                }
+                continue
+            }
+
+            // Classification select: SELECT_CLASSIFICATION: ISSUE-123 | 1
+            if trimmed.hasPrefix("SELECT_CLASSIFICATION:") {
+                let content = trimmed.replacingOccurrences(of: "SELECT_CLASSIFICATION:", with: "").trimmingCharacters(in: .whitespaces)
+                let parts = content.components(separatedBy: "|").map { $0.trimmingCharacters(in: .whitespaces) }
+                if parts.count >= 2, let index = Int(parts[1]) {
+                    let issueKey = parts[0]
+                    intents.append(.classificationSelect(issueKey: issueKey, optionIndex: index))
+                }
+                continue
+            }
+
+            // PCM lookup: PCM: ISSUE-123 | query
+            if trimmed.hasPrefix("PCM:") {
+                let content = trimmed.replacingOccurrences(of: "PCM:", with: "").trimmingCharacters(in: .whitespaces)
+                let parts = content.components(separatedBy: "|").map { $0.trimmingCharacters(in: .whitespaces) }
+                if parts.count >= 2 {
+                    let issueKey = parts[0]
+                    let query = parts[1]
+                    intents.append(.pcmLookup(issueKey: issueKey, query: query))
+                }
+                continue
+            }
+
+            // PCM select: SELECT_PCM: ISSUE-123 | 1
+            if trimmed.hasPrefix("SELECT_PCM:") {
+                let content = trimmed.replacingOccurrences(of: "SELECT_PCM:", with: "").trimmingCharacters(in: .whitespaces)
+                let parts = content.components(separatedBy: "|").map { $0.trimmingCharacters(in: .whitespaces) }
+                if parts.count >= 2, let index = Int(parts[1]) {
+                    let issueKey = parts[0]
+                    intents.append(.pcmSelect(issueKey: issueKey, optionIndex: index))
+                }
                 continue
             }
         }

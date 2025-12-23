@@ -12,6 +12,7 @@
 		A693ABF02EE7AB4C00768F00 /* MentionTextField.swift in Sources */ = {isa = PBXBuildFile; fileRef = A693ABEF2EE7AB4C00768F00 /* MentionTextField.swift */; };
 		A693ABF12EEA123400768F00 /* UserSelector.swift in Sources */ = {isa = PBXBuildFile; fileRef = A693ABF22EEA123400768F00 /* UserSelector.swift */; };
 		A693ABF32EEA234500768F00 /* PCMMasterSelector.swift in Sources */ = {isa = PBXBuildFile; fileRef = A693ABF42EEA234500768F00 /* PCMMasterSelector.swift */; };
+		A693ABF52EEB000000768F00 /* RequestClassificationSelector.swift in Sources */ = {isa = PBXBuildFile; fileRef = A693ABF62EEB000000768F00 /* RequestClassificationSelector.swift */; };
 		A6BACF672ED7C002000A4D2B /* JQLAutocomplete.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6BACF662ED7C002000A4D2B /* JQLAutocomplete.swift */; };
 		A6BACF692ED7C013000A4D2B /* JQLBuilderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6BACF682ED7C013000A4D2B /* JQLBuilderView.swift */; };
 		A6CBA4BA2ED0395200528322 /* WhisperService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6CBA4B92ED0395200528322 /* WhisperService.swift */; };
@@ -48,6 +49,7 @@
 		A693ABEF2EE7AB4C00768F00 /* MentionTextField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MentionTextField.swift; sourceTree = "<group>"; };
 		A693ABF22EEA123400768F00 /* UserSelector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserSelector.swift; sourceTree = "<group>"; };
 		A693ABF42EEA234500768F00 /* PCMMasterSelector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PCMMasterSelector.swift; sourceTree = "<group>"; };
+		A693ABF62EEB000000768F00 /* RequestClassificationSelector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RequestClassificationSelector.swift; sourceTree = "<group>"; };
 		A6BACF662ED7C002000A4D2B /* JQLAutocomplete.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JQLAutocomplete.swift; sourceTree = "<group>"; };
 		A6BACF682ED7C013000A4D2B /* JQLBuilderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JQLBuilderView.swift; sourceTree = "<group>"; };
 		A6CBA4B82ED0395200528322 /* AudioRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioRecorder.swift; sourceTree = "<group>"; };
@@ -155,6 +157,7 @@
 				A693ABEF2EE7AB4C00768F00 /* MentionTextField.swift */,
 				A693ABF22EEA123400768F00 /* UserSelector.swift */,
 				A693ABF42EEA234500768F00 /* PCMMasterSelector.swift */,
+				A693ABF62EEB000000768F00 /* RequestClassificationSelector.swift */,
 				A6F144C42EE16E04006F5F2C /* MenuBarQuickCreateView.swift */,
 				A6BACF682ED7C013000A4D2B /* JQLBuilderView.swift */,
 				BB0005 /* FilterPanel.swift */,
@@ -264,6 +267,7 @@
 				A693ABF02EE7AB4C00768F00 /* MentionTextField.swift in Sources */,
 				A693ABF12EEA123400768F00 /* UserSelector.swift in Sources */,
 				A693ABF32EEA234500768F00 /* PCMMasterSelector.swift in Sources */,
+				A693ABF52EEB000000768F00 /* RequestClassificationSelector.swift in Sources */,
 				AA0003 /* JiraModels.swift in Sources */,
 				A6CBA4BD2ED0395F00528322 /* IndigoModels.swift in Sources */,
 				A6BACF692ED7C013000A4D2B /* JQLBuilderView.swift in Sources */,

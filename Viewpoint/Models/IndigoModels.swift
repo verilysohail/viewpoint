@@ -112,6 +112,10 @@ struct AIResponse {
         case getTransitions(issueKey: String)
         case sprintLookup(query: String, projectKey: String?)
         case componentLookup(projectKey: String)
+        case classificationLookup(issueKey: String, query: String)
+        case classificationSelect(issueKey: String, optionIndex: Int)
+        case pcmLookup(issueKey: String, query: String)
+        case pcmSelect(issueKey: String, optionIndex: Int)
     }
 
     var estimatedCost: Double {

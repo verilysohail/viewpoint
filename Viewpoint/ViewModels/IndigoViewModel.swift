@@ -12,6 +12,12 @@ class IndigoViewModel: ObservableObject {
     @Published var modelStatus: String = ""
     @Published var selectedModel: AIModel
 
+    // Pending options for multi-turn selection
+    private var pendingClassificationOptions: [(display: String, parentValue: String, childValue: String?)] = []
+    private var pendingClassificationIssueKey: String?
+    private var pendingPCMOptions: [(display: String, id: String, objectKey: String)] = []
+    private var pendingPCMIssueKey: String?
+
     private let jiraService: JiraService
     private var cancellables = Set<AnyCancellable>()
     private var audioRecorder: AudioRecorder?
@@ -815,6 +821,176 @@ class IndigoViewModel: ObservableObject {
             } else {
                 addMessage(Message(
                     text: "❌ Failed to fetch components for project \(projectKey). Make sure the project key is correct.",
+                    sender: .system,
+                    status: .error
+                ))
+            }
+
+        case .classificationLookup(let issueKey, let query):
+            addMessage(Message(
+                text: "🔍 Searching Request Classification options for \"\(query)\"...",
+                sender: .system
+            ))
+
+            let results = await jiraService.searchRequestClassificationOptions(query: query)
+
+            if results.isEmpty {
+                addMessage(Message(
+                    text: "No classification options found matching \"\(query)\". Try a different search term.",
+                    sender: .system,
+                    status: .warning
+                ))
+            } else {
+                // Store pending options for selection
+                pendingClassificationOptions = Array(results.prefix(5))
+                pendingClassificationIssueKey = issueKey
+
+                var message = "📋 Found \(results.count) matching classification options for \(issueKey):\n\n"
+                for (index, option) in pendingClassificationOptions.enumerated() {
+                    message += "**\(index + 1).** \(option.display)\n"
+                }
+                message += "\nReply with a number (1-\(pendingClassificationOptions.count)) to select an option."
+
+                addMessage(Message(
+                    text: message,
+                    sender: .system,
+                    status: .success
+                ))
+            }
+
+        case .classificationSelect(let issueKey, let optionIndex):
+            // Check if we have pending options
+            guard !pendingClassificationOptions.isEmpty,
+                  let pendingIssueKey = pendingClassificationIssueKey,
+                  pendingIssueKey == issueKey || issueKey.isEmpty else {
+                addMessage(Message(
+                    text: "❌ No pending classification options. Please search first using a query like \"classify this as software\".",
+                    sender: .system,
+                    status: .error
+                ))
+                return
+            }
+
+            let actualIssueKey = issueKey.isEmpty ? pendingIssueKey : issueKey
+
+            guard optionIndex >= 1 && optionIndex <= pendingClassificationOptions.count else {
+                addMessage(Message(
+                    text: "❌ Invalid option number. Please choose between 1 and \(pendingClassificationOptions.count).",
+                    sender: .system,
+                    status: .error
+                ))
+                return
+            }
+
+            let selectedOption = pendingClassificationOptions[optionIndex - 1]
+            addMessage(Message(
+                text: "✏️ Setting Request Classification to \"\(selectedOption.display)\"...",
+                sender: .system
+            ))
+
+            let success = await jiraService.updateRequestClassification(
+                issueKey: actualIssueKey,
+                parentValue: selectedOption.parentValue,
+                childValue: selectedOption.childValue
+            )
+
+            if success {
+                addMessage(Message(
+                    text: "✅ Successfully set Request Classification to \"\(selectedOption.display)\" for \(actualIssueKey).",
+                    sender: .system,
+                    status: .success
+                ))
+                // Clear pending options
+                pendingClassificationOptions = []
+                pendingClassificationIssueKey = nil
+                // Refresh issues
+                Task { await jiraService.fetchMyIssues() }
+            } else {
+                addMessage(Message(
+                    text: "❌ Failed to update Request Classification for \(actualIssueKey).",
+                    sender: .system,
+                    status: .error
+                ))
+            }
+
+        case .pcmLookup(let issueKey, let query):
+            addMessage(Message(
+                text: "🔍 Searching PCM Master options for \"\(query)\"...",
+                sender: .system
+            ))
+
+            let results = await jiraService.searchPCMMasterOptions(query: query)
+
+            if results.isEmpty {
+                addMessage(Message(
+                    text: "No PCM Master options found matching \"\(query)\". Try a different search term.",
+                    sender: .system,
+                    status: .warning
+                ))
+            } else {
+                // Store pending options for selection
+                pendingPCMOptions = Array(results.prefix(5))
+                pendingPCMIssueKey = issueKey
+
+                var message = "📋 Found \(results.count) matching PCM Master options for \(issueKey):\n\n"
+                for (index, option) in pendingPCMOptions.enumerated() {
+                    message += "**\(index + 1).** \(option.display)\n"
+                }
+                message += "\nReply with a number (1-\(pendingPCMOptions.count)) to select an option."
+
+                addMessage(Message(
+                    text: message,
+                    sender: .system,
+                    status: .success
+                ))
+            }
+
+        case .pcmSelect(let issueKey, let optionIndex):
+            // Check if we have pending options
+            guard !pendingPCMOptions.isEmpty,
+                  let pendingIssueKey = pendingPCMIssueKey,
+                  pendingIssueKey == issueKey || issueKey.isEmpty else {
+                addMessage(Message(
+                    text: "❌ No pending PCM options. Please search first using a query like \"set PCM to Slack\".",
+                    sender: .system,
+                    status: .error
+                ))
+                return
+            }
+
+            let actualIssueKey = issueKey.isEmpty ? pendingIssueKey : issueKey
+
+            guard optionIndex >= 1 && optionIndex <= pendingPCMOptions.count else {
+                addMessage(Message(
+                    text: "❌ Invalid option number. Please choose between 1 and \(pendingPCMOptions.count).",
+                    sender: .system,
+                    status: .error
+                ))
+                return
+            }
+
+            let selectedOption = pendingPCMOptions[optionIndex - 1]
+            addMessage(Message(
+                text: "✏️ Setting PCM Master to \"\(selectedOption.display)\"...",
+                sender: .system
+            ))
+
+            let success = await jiraService.updatePCMMaster(issueKey: actualIssueKey, objectId: selectedOption.id)
+
+            if success {
+                addMessage(Message(
+                    text: "✅ Successfully set PCM Master to \"\(selectedOption.display)\" for \(actualIssueKey).",
+                    sender: .system,
+                    status: .success
+                ))
+                // Clear pending options
+                pendingPCMOptions = []
+                pendingPCMIssueKey = nil
+                // Refresh issues
+                Task { await jiraService.fetchMyIssues() }
+            } else {
+                addMessage(Message(
+                    text: "❌ Failed to update PCM Master for \(actualIssueKey).",
                     sender: .system,
                     status: .error
                 ))

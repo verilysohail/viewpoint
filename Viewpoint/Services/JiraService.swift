@@ -219,7 +219,7 @@ class JiraService: ObservableObject {
                 var queryItems = [
                     URLQueryItem(name: "jql", value: jql),
                     URLQueryItem(name: "maxResults", value: String(maxResults)),
-                    URLQueryItem(name: "fields", value: "summary,status,resolution,assignee,reporter,issuetype,project,priority,created,updated,components,customfield_10014,customfield_10016,customfield_10020,customfield_11920,timeoriginalestimate,timespent,timeestimate")
+                    URLQueryItem(name: "fields", value: "summary,status,resolution,assignee,reporter,issuetype,project,priority,created,updated,components,customfield_10014,customfield_10016,customfield_10020,customfield_11920,customfield_12448,timeoriginalestimate,timespent,timeestimate")
                 ]
 
                 // Add nextPageToken if we have one (not on first page)
@@ -332,7 +332,7 @@ class JiraService: ObservableObject {
             components.queryItems = [
                 URLQueryItem(name: "jql", value: jql),
                 URLQueryItem(name: "maxResults", value: String(maxResults)),
-                URLQueryItem(name: "fields", value: "summary,status,resolution,assignee,reporter,issuetype,project,priority,created,updated,components,customfield_10014,customfield_10016,customfield_10020,customfield_11920,timeoriginalestimate,timespent,timeestimate")
+                URLQueryItem(name: "fields", value: "summary,status,resolution,assignee,reporter,issuetype,project,priority,created,updated,components,customfield_10014,customfield_10016,customfield_10020,customfield_11920,customfield_12448,timeoriginalestimate,timespent,timeestimate")
             ]
 
             guard let url = components.url else {
@@ -700,7 +700,7 @@ class JiraService: ObservableObject {
         components.queryItems = [
             URLQueryItem(name: "jql", value: jql),
             URLQueryItem(name: "maxResults", value: "100"),
-            URLQueryItem(name: "fields", value: "summary,status,resolution,assignee,reporter,issuetype,project,priority,created,updated,components,customfield_10014,customfield_10016,customfield_10020,customfield_11920,timeoriginalestimate,timespent,timeestimate")
+            URLQueryItem(name: "fields", value: "summary,status,resolution,assignee,reporter,issuetype,project,priority,created,updated,components,customfield_10014,customfield_10016,customfield_10020,customfield_11920,customfield_12448,timeoriginalestimate,timespent,timeestimate")
         ]
 
         guard let url = components.url else {
@@ -2090,7 +2090,7 @@ class JiraService: ObservableObject {
         // Use expand parameter to get CMDB object attributes
         var components = URLComponents(string: "\(config.jiraBaseURL)/rest/api/3/issue/\(issueKey)")!
         components.queryItems = [
-            URLQueryItem(name: "fields", value: "summary,status,resolution,assignee,reporter,issuetype,project,priority,created,updated,components,description,customfield_10014,customfield_10016,customfield_10020,customfield_11920,timeoriginalestimate,timespent,timeestimate"),
+            URLQueryItem(name: "fields", value: "summary,status,resolution,assignee,reporter,issuetype,project,priority,created,updated,components,description,customfield_10014,customfield_10016,customfield_10020,customfield_11920,customfield_12448,timeoriginalestimate,timespent,timeestimate"),
             URLQueryItem(name: "expand", value: "names,renderedFields")
         ]
 
@@ -2179,7 +2179,7 @@ class JiraService: ObservableObject {
         components.queryItems = [
             URLQueryItem(name: "jql", value: jql),
             URLQueryItem(name: "maxResults", value: "50"),
-            URLQueryItem(name: "fields", value: "summary,status,resolution,assignee,reporter,issuetype,project,priority,created,updated,components,customfield_10014,customfield_10016,customfield_10020,customfield_11920,timeoriginalestimate,timespent,timeestimate")
+            URLQueryItem(name: "fields", value: "summary,status,resolution,assignee,reporter,issuetype,project,priority,created,updated,components,customfield_10014,customfield_10016,customfield_10020,customfield_11920,customfield_12448,timeoriginalestimate,timespent,timeestimate")
         ]
 
         guard let url = components.url else {
@@ -3040,6 +3040,227 @@ class JiraService: ObservableObject {
         }
 
         return (false, [])
+    }
+
+    // MARK: - Request Classification (Cascading Select)
+
+    /// Fetch available options for Request Classification field (customfield_12448)
+    /// Returns a list of parent options, each with their child options
+    func fetchRequestClassificationOptions() async -> [CascadingSelectOption] {
+        Logger.shared.info("Fetching Request Classification options")
+
+        // Use the field context options endpoint
+        // First, we need to get the field context
+        guard let contextUrl = URL(string: "\(config.jiraBaseURL)/rest/api/3/field/customfield_12448/context") else {
+            Logger.shared.error("Invalid URL for fetching field context")
+            return []
+        }
+
+        let contextRequest = createRequest(url: contextUrl)
+
+        do {
+            let (contextData, contextResponse) = try await URLSession.shared.data(for: contextRequest)
+
+            guard let httpResponse = contextResponse as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+                Logger.shared.error("Failed to fetch field context")
+                return []
+            }
+
+            // Parse context to get context ID
+            guard let contextJson = try? JSONSerialization.jsonObject(with: contextData) as? [String: Any],
+                  let values = contextJson["values"] as? [[String: Any]],
+                  let firstContext = values.first,
+                  let contextId = firstContext["id"] as? String else {
+                Logger.shared.error("Failed to parse field context")
+                return []
+            }
+
+            Logger.shared.info("Found context ID: \(contextId)")
+
+            // Now fetch options for this context
+            guard let optionsUrl = URL(string: "\(config.jiraBaseURL)/rest/api/3/field/customfield_12448/context/\(contextId)/option") else {
+                Logger.shared.error("Invalid URL for fetching field options")
+                return []
+            }
+
+            let optionsRequest = createRequest(url: optionsUrl)
+            let (optionsData, optionsResponse) = try await URLSession.shared.data(for: optionsRequest)
+
+            guard let optionsHttpResponse = optionsResponse as? HTTPURLResponse, optionsHttpResponse.statusCode == 200 else {
+                if let errorBody = String(data: optionsData, encoding: .utf8) {
+                    Logger.shared.error("Failed to fetch field options: \(errorBody)")
+                }
+                return []
+            }
+
+            // Parse options - cascading selects have parent options with optionId references
+            guard let optionsJson = try? JSONSerialization.jsonObject(with: optionsData) as? [String: Any],
+                  let optionValues = optionsJson["values"] as? [[String: Any]] else {
+                Logger.shared.error("Failed to parse field options")
+                return []
+            }
+
+            // Separate parent and child options
+            var parentOptions: [String: CascadingSelectOption] = [:]
+            var childOptionsByParent: [String: [CascadingSelectOption.CascadingSelectOptionChild]] = [:]
+
+            for option in optionValues {
+                guard let id = option["id"] as? String,
+                      let value = option["value"] as? String else { continue }
+
+                if let parentId = option["optionId"] as? String {
+                    // This is a child option
+                    let child = CascadingSelectOption.CascadingSelectOptionChild(id: id, value: value)
+                    if childOptionsByParent[parentId] == nil {
+                        childOptionsByParent[parentId] = []
+                    }
+                    childOptionsByParent[parentId]?.append(child)
+                } else {
+                    // This is a parent option
+                    parentOptions[id] = CascadingSelectOption(id: id, value: value, children: nil)
+                }
+            }
+
+            // Combine parents with their children
+            var result: [CascadingSelectOption] = []
+            for (parentId, parentOption) in parentOptions {
+                let children = childOptionsByParent[parentId] ?? []
+                let combined = CascadingSelectOption(
+                    id: parentOption.id,
+                    value: parentOption.value,
+                    children: children.isEmpty ? nil : children
+                )
+                result.append(combined)
+            }
+
+            // Sort by value
+            result.sort { $0.value.lowercased() < $1.value.lowercased() }
+
+            Logger.shared.info("Successfully fetched \(result.count) parent options for Request Classification")
+            return result
+
+        } catch {
+            Logger.shared.error("Failed to fetch Request Classification options: \(error)")
+            return []
+        }
+    }
+
+    /// Update Request Classification field for an issue
+    func updateRequestClassification(issueKey: String, parentValue: String?, childValue: String?) async -> Bool {
+        Logger.shared.info("Updating Request Classification for \(issueKey): parent=\(parentValue ?? "nil"), child=\(childValue ?? "nil")")
+
+        guard let url = URL(string: "\(config.jiraBaseURL)/rest/api/3/issue/\(issueKey)") else {
+            Logger.shared.error("Invalid URL for updating issue")
+            return false
+        }
+
+        var request = createRequest(url: url)
+        request.httpMethod = "PUT"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        // Build the field value
+        var fieldValue: [String: Any]?
+
+        if let parent = parentValue {
+            var value: [String: Any] = ["value": parent]
+            if let child = childValue {
+                value["child"] = ["value": child]
+            }
+            fieldValue = value
+        }
+
+        let body: [String: Any] = [
+            "fields": [
+                "customfield_12448": fieldValue as Any
+            ]
+        ]
+
+        do {
+            request.httpBody = try JSONSerialization.data(withJSONObject: body)
+            let (data, response) = try await URLSession.shared.data(for: request)
+
+            if let httpResponse = response as? HTTPURLResponse {
+                Logger.shared.info("Update Request Classification response status: \(httpResponse.statusCode)")
+
+                if httpResponse.statusCode == 204 || httpResponse.statusCode == 200 {
+                    Logger.shared.info("Successfully updated Request Classification for \(issueKey)")
+                    return true
+                } else {
+                    if let errorBody = String(data: data, encoding: .utf8) {
+                        Logger.shared.error("Error updating Request Classification: \(errorBody)")
+                    }
+                    return false
+                }
+            }
+        } catch {
+            Logger.shared.error("Failed to update Request Classification: \(error)")
+        }
+
+        return false
+    }
+
+    /// Search Request Classification options by query
+    /// Returns matching parent/child combinations as displayable strings with their values
+    func searchRequestClassificationOptions(query: String) async -> [(display: String, parentValue: String, childValue: String?)] {
+        let options = await fetchRequestClassificationOptions()
+        let lowercaseQuery = query.lowercased()
+        var results: [(display: String, parentValue: String, childValue: String?)] = []
+
+        for parent in options {
+            // Check if parent matches
+            let parentMatches = parent.value.lowercased().contains(lowercaseQuery)
+
+            if let children = parent.children, !children.isEmpty {
+                for child in children {
+                    // Include if parent or child matches the query
+                    if parentMatches || child.value.lowercased().contains(lowercaseQuery) {
+                        results.append((
+                            display: "\(parent.value) → \(child.value)",
+                            parentValue: parent.value,
+                            childValue: child.value
+                        ))
+                    }
+                }
+            } else if parentMatches {
+                // Parent with no children
+                results.append((
+                    display: parent.value,
+                    parentValue: parent.value,
+                    childValue: nil
+                ))
+            }
+        }
+
+        // Sort by relevance (exact matches first, then by name)
+        results.sort { a, b in
+            let aExact = a.display.lowercased() == lowercaseQuery
+            let bExact = b.display.lowercased() == lowercaseQuery
+            if aExact != bExact { return aExact }
+            return a.display.lowercased() < b.display.lowercased()
+        }
+
+        return results
+    }
+
+    /// Search PCM Master options by query and return formatted results
+    func searchPCMMasterOptions(query: String) async -> [(display: String, id: String, objectKey: String)] {
+        let allOptions = await searchPCMMaster()
+        let lowercaseQuery = query.lowercased()
+
+        var results = allOptions.filter {
+            $0.label.lowercased().contains(lowercaseQuery) ||
+            $0.objectKey.lowercased().contains(lowercaseQuery)
+        }
+
+        // Sort by relevance
+        results.sort { a, b in
+            let aExact = a.label.lowercased() == lowercaseQuery
+            let bExact = b.label.lowercased() == lowercaseQuery
+            if aExact != bExact { return aExact }
+            return a.label.lowercased() < b.label.lowercased()
+        }
+
+        return results.map { (display: $0.label, id: $0.id, objectKey: $0.objectKey) }
     }
 
     // MARK: - Helper Functions

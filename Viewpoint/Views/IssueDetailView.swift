@@ -267,6 +267,9 @@ struct IssueDetailView: View {
                     // PCM Master
                     PCMMasterSelector(issue: issueDetails.issue)
 
+                    // Request Classification
+                    RequestClassificationSelector(issue: issueDetails.issue)
+
                     Spacer()
                 }
                 .frame(width: 250, alignment: .leading)

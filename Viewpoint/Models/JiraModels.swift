@@ -17,6 +17,7 @@ struct JiraIssue: Codable, Identifiable, Hashable {
     var epic: String? { fields.customfield_10014 } // Epic link field
     var priority: String? { fields.priority?.name }
     var pcmMaster: CMDBObjectField? { fields.customfield_11920?.first } // PCM Master (CMDB)
+    var requestClassification: CascadingSelectField? { fields.customfield_12448 } // Request Classification (cascading)
 
     // Helper to create a copy with updated fields
     func withFields(_ newFields: IssueFields) -> JiraIssue {
@@ -79,6 +80,7 @@ struct IssueFields: Codable, Hashable {
     let customfield_10016: Double? // Story Points
     let customfield_10020: [SprintField]? // Sprint
     let customfield_11920: [CMDBObjectField]? // PCM Master (CMDB lookup)
+    let customfield_12448: CascadingSelectField? // Request Classification (cascading select)
     let timeoriginalestimate: Int? // Original Estimate (seconds)
     let timespent: Int? // Time Logged (seconds)
     let timeestimate: Int? // Time Remaining (seconds)
@@ -101,6 +103,7 @@ struct IssueFields: Codable, Hashable {
             customfield_10016: customfield_10016,
             customfield_10020: sprint,
             customfield_11920: customfield_11920,
+            customfield_12448: customfield_12448,
             timeoriginalestimate: timeoriginalestimate,
             timespent: timespent,
             timeestimate: timeestimate
@@ -125,6 +128,7 @@ struct IssueFields: Codable, Hashable {
             customfield_10016: customfield_10016,
             customfield_10020: customfield_10020,
             customfield_11920: customfield_11920,
+            customfield_12448: customfield_12448,
             timeoriginalestimate: timeoriginalestimate,
             timespent: timespent,
             timeestimate: timeestimate
@@ -147,6 +151,7 @@ struct IssueFields: Codable, Hashable {
         customfield_10016: Double?,
         customfield_10020: [SprintField]?,
         customfield_11920: [CMDBObjectField]?,
+        customfield_12448: CascadingSelectField?,
         timeoriginalestimate: Int?,
         timespent: Int?,
         timeestimate: Int?
@@ -166,6 +171,7 @@ struct IssueFields: Codable, Hashable {
         self.customfield_10016 = customfield_10016
         self.customfield_10020 = customfield_10020
         self.customfield_11920 = customfield_11920
+        self.customfield_12448 = customfield_12448
         self.timeoriginalestimate = timeoriginalestimate
         self.timespent = timespent
         self.timeestimate = timeestimate
@@ -175,7 +181,7 @@ struct IssueFields: Codable, Hashable {
     enum CodingKeys: String, CodingKey {
         case summary, status, resolution, assignee, reporter, issuetype, project, priority, created, updated
         case components
-        case customfield_10014, customfield_10016, customfield_10020, customfield_11920
+        case customfield_10014, customfield_10016, customfield_10020, customfield_11920, customfield_12448
         case timeoriginalestimate, timespent, timeestimate
     }
 
@@ -197,6 +203,7 @@ struct IssueFields: Codable, Hashable {
         customfield_10016 = try container.decodeIfPresent(Double.self, forKey: .customfield_10016)
         customfield_10020 = try container.decodeIfPresent([SprintField].self, forKey: .customfield_10020)
         customfield_11920 = try container.decodeIfPresent([CMDBObjectField].self, forKey: .customfield_11920)
+        customfield_12448 = try container.decodeIfPresent(CascadingSelectField.self, forKey: .customfield_12448)
         timeoriginalestimate = try container.decodeIfPresent(Int.self, forKey: .timeoriginalestimate)
         timespent = try container.decodeIfPresent(Int.self, forKey: .timespent)
         timeestimate = try container.decodeIfPresent(Int.self, forKey: .timeestimate)
@@ -319,6 +326,45 @@ struct JiraComponent: Codable, Identifiable {
     struct ComponentLead: Codable {
         let displayName: String?
         let emailAddress: String?
+    }
+}
+
+/// Cascading select field (parent + child) for fields like Request Classification
+struct CascadingSelectField: Codable, Hashable {
+    let self_: String?
+    let value: String
+    let id: String?
+    let child: CascadingSelectChild?
+
+    enum CodingKeys: String, CodingKey {
+        case self_ = "self"
+        case value
+        case id
+        case child
+    }
+
+    struct CascadingSelectChild: Codable, Hashable {
+        let self_: String?
+        let value: String
+        let id: String?
+
+        enum CodingKeys: String, CodingKey {
+            case self_ = "self"
+            case value
+            case id
+        }
+    }
+}
+
+/// Option for a cascading select field (used for available options)
+struct CascadingSelectOption: Codable, Identifiable, Hashable {
+    let id: String
+    let value: String
+    let children: [CascadingSelectOptionChild]?
+
+    struct CascadingSelectOptionChild: Codable, Identifiable, Hashable {
+        let id: String
+        let value: String
     }
 }
 
