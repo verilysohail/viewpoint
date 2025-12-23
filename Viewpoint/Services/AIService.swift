@@ -400,7 +400,8 @@ class AIService {
     private func describeSelectedIssues(_ issues: [JiraIssue]) -> String {
         return issues.map { issue in
             let assignee = issue.assignee ?? "Unassigned"
-            return "\(issue.key) [\(issue.status), \(assignee)]: \(issue.summary)"
+            let reporter = issue.reporter ?? "Unknown"
+            return "\(issue.key) [\(issue.status), Assignee: \(assignee), Reporter: \(reporter)]: \(issue.summary)"
         }.joined(separator: "\n  ")
     }
 
@@ -415,7 +416,7 @@ class AIService {
 
               \(detail.issue.key): \(detail.issue.summary)
               Type: \(detail.issue.issueType) | Status: \(detail.issue.status) | Priority: \(detail.issue.priority ?? "None")
-              Assignee: \(detail.issue.assignee ?? "Unassigned") | PCM Master: \(pcmMasterValue)
+              Assignee: \(detail.issue.assignee ?? "Unassigned") | Reporter: \(detail.issue.reporter ?? "Unknown") | PCM Master: \(pcmMasterValue)
             """
 
             if let description = detail.description, !description.isEmpty {
