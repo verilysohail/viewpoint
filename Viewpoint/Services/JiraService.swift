@@ -916,6 +916,41 @@ class JiraService: ObservableObject {
         }
     }
 
+    /// Fetch available transitions for an issue
+    func fetchTransitions(forIssue issueKey: String) async -> [(id: String, name: String, targetStatus: String)] {
+        let transitionsURL = "\(config.jiraBaseURL)/rest/api/3/issue/\(issueKey)/transitions"
+
+        guard let url = URL(string: transitionsURL) else {
+            Logger.shared.error("Invalid URL for getting transitions")
+            return []
+        }
+
+        let request = createRequest(url: url)
+
+        do {
+            let (data, _) = try await URLSession.shared.data(for: request)
+
+            if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let transitions = json["transitions"] as? [[String: Any]] {
+
+                return transitions.compactMap { trans -> (id: String, name: String, targetStatus: String)? in
+                    guard let id = trans["id"] as? String,
+                          let name = trans["name"] as? String,
+                          let to = trans["to"] as? [String: Any],
+                          let targetStatus = to["name"] as? String else {
+                        return nil
+                    }
+                    return (id: id, name: name, targetStatus: targetStatus)
+                }
+            }
+
+            return []
+        } catch {
+            Logger.shared.error("Failed to fetch transitions: \(error)")
+            return []
+        }
+    }
+
     func updateIssueStatus(issueKey: String, newStatus: String, fieldValues: [String: String] = [:]) async -> Bool {
         // First, get available transitions for this issue (with field expansion to get allowed values)
         let transitionsURL = "\(config.jiraBaseURL)/rest/api/3/issue/\(issueKey)/transitions?expand=transitions.fields"

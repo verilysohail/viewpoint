@@ -9,8 +9,8 @@ class Logger {
     private let logDirectory: URL
 
     // Log rotation settings
-    private let maxLogFileSize: UInt64 = 10 * 1024 * 1024 // 10 MB
-    private let maxRotatedFiles: Int = 5 // Keep 5 old log files
+    private let maxLogFileSize: UInt64 = 1 * 1024 * 1024 // 1 MB
+    private let maxRotatedFiles: Int = 3 // Keep 3 old log files
     private var messagesSinceLastCheck = 0
     private let checkInterval = 100 // Check file size every 100 log messages
 
@@ -24,6 +24,12 @@ class Logger {
 
         logFileURL = logDirectory.appendingPathComponent("viewpoint.log")
 
+        dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd HH:mm:ss.SSS"
+
+        // Check for rotation on startup (before opening file handle)
+        rotateLogsOnStartupIfNeeded()
+
         // Create or open log file
         if !FileManager.default.fileExists(atPath: logFileURL.path) {
             FileManager.default.createFile(atPath: logFileURL.path, contents: nil)
@@ -32,12 +38,36 @@ class Logger {
         fileHandle = try? FileHandle(forWritingTo: logFileURL)
         fileHandle?.seekToEndOfFile()
 
-        dateFormatter = DateFormatter()
-        dateFormatter.dateFormat = "yyyy-MM-dd HH:mm:ss.SSS"
-
         // Log startup
         log("=== Viewpoint started ===", level: .info)
         log("Log file: \(logFileURL.path)", level: .info)
+    }
+
+    private func rotateLogsOnStartupIfNeeded() {
+        guard FileManager.default.fileExists(atPath: logFileURL.path),
+              let attributes = try? FileManager.default.attributesOfItem(atPath: logFileURL.path),
+              let fileSize = attributes[.size] as? UInt64,
+              fileSize >= maxLogFileSize else {
+            return
+        }
+
+        // Rotate log files on startup
+        // Delete oldest log file if it exists
+        let oldestLogURL = logDirectory.appendingPathComponent("viewpoint.log.\(maxRotatedFiles)")
+        try? FileManager.default.removeItem(at: oldestLogURL)
+
+        // Rename existing rotated logs
+        for i in stride(from: maxRotatedFiles - 1, through: 1, by: -1) {
+            let sourceURL = logDirectory.appendingPathComponent("viewpoint.log.\(i)")
+            let destURL = logDirectory.appendingPathComponent("viewpoint.log.\(i + 1)")
+            try? FileManager.default.moveItem(at: sourceURL, to: destURL)
+        }
+
+        // Rename current log to viewpoint.log.1
+        let rotatedLogURL = logDirectory.appendingPathComponent("viewpoint.log.1")
+        try? FileManager.default.moveItem(at: logFileURL, to: rotatedLogURL)
+
+        print("Log rotated on startup: \(fileSize) bytes -> viewpoint.log.1")
     }
 
     enum Level: String {

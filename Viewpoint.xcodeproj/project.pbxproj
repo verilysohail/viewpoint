@@ -9,6 +9,9 @@
 /* Begin PBXBuildFile section */
 		4EFE67 /* ManageViewsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C76CE /* ManageViewsSheet.swift */; };
 		54A55E /* SaveViewDialog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 069156 /* SaveViewDialog.swift */; };
+		CAP001 /* Capability.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAP101 /* Capability.swift */; };
+		CAP002 /* CapabilityRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAP102 /* CapabilityRegistry.swift */; };
+		CAP003 /* JiraCapability.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAP103 /* JiraCapability.swift */; };
 		A693ABF02EE7AB4C00768F00 /* MentionTextField.swift in Sources */ = {isa = PBXBuildFile; fileRef = A693ABEF2EE7AB4C00768F00 /* MentionTextField.swift */; };
 		A693ABF12EEA123400768F00 /* UserSelector.swift in Sources */ = {isa = PBXBuildFile; fileRef = A693ABF22EEA123400768F00 /* UserSelector.swift */; };
 		A693ABF32EEA234500768F00 /* PCMMasterSelector.swift in Sources */ = {isa = PBXBuildFile; fileRef = A693ABF42EEA234500768F00 /* PCMMasterSelector.swift */; };
@@ -45,6 +48,9 @@
 /* Begin PBXFileReference section */
 		069156 /* SaveViewDialog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveViewDialog.swift; sourceTree = "<group>"; };
 		2B4DE6 /* SavedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedView.swift; sourceTree = "<group>"; };
+		CAP101 /* Capability.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Capability.swift; sourceTree = "<group>"; };
+		CAP102 /* CapabilityRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CapabilityRegistry.swift; sourceTree = "<group>"; };
+		CAP103 /* JiraCapability.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JiraCapability.swift; sourceTree = "<group>"; };
 		6C76CE /* ManageViewsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManageViewsSheet.swift; sourceTree = "<group>"; };
 		A693ABEF2EE7AB4C00768F00 /* MentionTextField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MentionTextField.swift; sourceTree = "<group>"; };
 		A693ABF22EEA123400768F00 /* UserSelector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserSelector.swift; sourceTree = "<group>"; };
@@ -100,6 +106,16 @@
 			path = ViewModels;
 			sourceTree = "<group>";
 		};
+		CAP100 /* Capabilities */ = {
+			isa = PBXGroup;
+			children = (
+				CAP101 /* Capability.swift */,
+				CAP102 /* CapabilityRegistry.swift */,
+				CAP103 /* JiraCapability.swift */,
+			);
+			path = Capabilities;
+			sourceTree = "<group>";
+		};
 		EE0001 = {
 			isa = PBXGroup;
 			children = (
@@ -117,6 +133,7 @@
 				FF0003 /* Services */,
 				FF0004 /* Views */,
 				FF0005 /* Config */,
+				CAP100 /* Capabilities */,
 				BB0010 /* Assets.xcassets */,
 				BB0008 /* Info.plist */,
 				BB0009 /* Viewpoint.entitlements */,
@@ -261,6 +278,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				CAP001 /* Capability.swift in Sources */,
+				CAP002 /* CapabilityRegistry.swift in Sources */,
+				CAP003 /* JiraCapability.swift in Sources */,
 				AA0001 /* ViewpointApp.swift in Sources */,
 				A6F144C52EE16E04006F5F2C /* MenuBarQuickCreateView.swift in Sources */,
 				AA0002 /* ContentView.swift in Sources */,

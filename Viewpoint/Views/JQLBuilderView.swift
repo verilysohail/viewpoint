@@ -221,7 +221,35 @@ struct JQLBuilderView: View {
                     )
                 }
 
-        case "assignee", "reporter", "status", "type", "issuetype", "component", "components", "priority":
+        case "assignee", "reporter":
+            // For user fields, extract email from "Display Name - email@domain" format
+            let apiSuggestions = await jiraService.fetchJQLAutocompleteSuggestions(
+                fieldName: field.name,
+                query: currentInput
+            )
+
+            newSuggestions += apiSuggestions
+                .filter { currentInput.isEmpty || $0.lowercased().contains(currentInput) }
+                .sorted()
+                .map { value in
+                    // Extract email portion for JQL (Jira needs email, not display name)
+                    let jqlValue: String
+                    if let dashRange = value.range(of: " - "), value.contains("@") {
+                        // Format: "Display Name - email@domain"
+                        let email = String(value[dashRange.upperBound...])
+                        jqlValue = email
+                    } else {
+                        jqlValue = value
+                    }
+                    return JQLSuggestion(
+                        text: "\"\(jqlValue)\"",
+                        displayText: value,
+                        type: .value,
+                        description: nil
+                    )
+                }
+
+        case "status", "type", "issuetype", "component", "components", "priority":
             let apiSuggestions = await jiraService.fetchJQLAutocompleteSuggestions(
                 fieldName: field.name,
                 query: currentInput

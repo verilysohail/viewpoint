@@ -9,6 +9,11 @@ struct ViewpointApp: App {
     @AppStorage("hasCompletedSetup") private var hasCompletedSetup = false
     @AppStorage("showMenuBarIcon") private var showMenuBarIcon = true
 
+    init() {
+        // Register capabilities on app initialization
+        // This is done here so capabilities are available throughout the app
+    }
+
     var body: some Scene {
         WindowGroup {
             ContentView()
@@ -18,6 +23,7 @@ struct ViewpointApp: App {
                 .onAppear {
                     checkFirstRun()
                     appDelegate.configure(with: jiraService)
+                    registerCapabilities()
                     updateMenuBarIcon()
                 }
                 .onChange(of: showMenuBarIcon) { _ in
@@ -86,6 +92,15 @@ struct ViewpointApp: App {
         } else {
             Logger.shared.info("ViewpointApp: Calling hideMenuBar()")
             appDelegate.hideMenuBar()
+        }
+    }
+
+    private func registerCapabilities() {
+        // Register Jira capability with all its tools
+        let jiraCapability = JiraCapability(jiraService: jiraService)
+        Task { @MainActor in
+            CapabilityRegistry.shared.register(jiraCapability)
+            Logger.shared.info("Registered \(CapabilityRegistry.shared.totalToolCount) tools from capabilities")
         }
     }
 }
