@@ -230,7 +230,7 @@ struct IndigoView: View {
                 .buttonStyle(.plain)
                 .help("Voice input (Phase 2)")
 
-                // Text input - using custom NSTextField for reliable Enter key handling
+                // Text input - using custom NSTextView for multi-line support with Enter key handling
                 SubmittableTextField(
                     "Type or speak your command...",
                     text: $viewModel.inputText,
@@ -239,9 +239,10 @@ struct IndigoView: View {
                     },
                     font: .systemFont(ofSize: NSFont.systemFontSize),
                     backgroundColor: NSColor.controlBackgroundColor.withAlphaComponent(0.5),
-                    focusOnAppear: true
+                    focusOnAppear: true,
+                    minHeight: 36,
+                    maxHeight: 120
                 )
-                .frame(height: 36)
                 .cornerRadius(8)
 
                 // Send button

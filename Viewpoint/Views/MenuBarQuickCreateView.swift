@@ -119,9 +119,10 @@ struct MenuBarQuickCreateView: View {
                     viewModel.dismissAction()
                 },
                 isBordered: true,
-                focusOnAppear: true
+                focusOnAppear: true,
+                minHeight: 22,
+                maxHeight: 22
             )
-            .frame(height: 22)
 
             // Project info or error
             if !viewModel.defaultProject.isEmpty {

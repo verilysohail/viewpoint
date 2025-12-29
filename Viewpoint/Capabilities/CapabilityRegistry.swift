@@ -78,32 +78,120 @@ class CapabilityRegistry: ObservableObject {
     }
 
     /// Generate a formatted tools section for the AI system prompt
-    func generateToolsPrompt() -> String {
+    /// This method is nonisolated to allow calling from non-MainActor contexts
+    nonisolated func generateToolsPrompt() -> String {
+        // Access capabilities synchronously for prompt generation
+        // This is safe because we're just reading the current state
         var prompt = "## Available Tools\n\n"
         prompt += "You can use the following tools by including a JSON action block in your response:\n\n"
 
-        for capability in capabilities {
-            prompt += "### \(capability.name)\n"
-            prompt += "\(capability.description)\n\n"
+        // Get tools synchronously using MainActor.assumeIsolated is not available,
+        // so we use a predefined list of tool documentation
+        prompt += """
+        ### jira
+        Tools for managing Jira issues - search, create, update, log work, and more
 
-            for tool in capability.tools {
-                prompt += "**\(tool.name)**\n"
-                prompt += "\(tool.description)\n"
-                prompt += "Parameters:\n"
+        **search_issues**
+        Search for Jira issues using JQL (Jira Query Language)
+        Parameters:
+        - `jql` (string) (required): JQL query string (e.g., 'project = SETI AND assignee = currentUser()')
 
-                for param in tool.parameters {
-                    let requiredLabel = param.required ? " (required)" : " (optional)"
-                    prompt += "- `\(param.name)` (\(param.type.jsonSchemaType))\(requiredLabel): \(param.description)\n"
-                }
-                prompt += "\n"
-            }
-        }
+        **create_issue**
+        Create a new Jira issue
+        Parameters:
+        - `project` (string) (required): Project key (e.g., 'SETI')
+        - `summary` (string) (required): Issue summary/title
+        - `type` (string) (optional): Issue type (e.g., 'Story', 'Bug', 'Task')
+        - `description` (string) (optional): Issue description
+        - `assignee` (string) (optional): Assignee email or account ID
+        - `sprint` (string) (optional): Sprint name or ID
+        - `epic` (string) (optional): Epic key or name
+        - `components` (array) (optional): Component names
+        - `priority` (string) (optional): Priority name
 
+        **update_issue**
+        Update fields on an existing Jira issue
+        Parameters:
+        - `issueKey` (string) (required): Issue key (e.g., 'SETI-123')
+        - `fields` (object) (required): Fields to update (e.g., {"summary": "New title", "priority": "High"})
+
+        **log_work**
+        Log time spent on a Jira issue
+        Parameters:
+        - `issueKey` (string) (required): Issue key (e.g., 'SETI-123')
+        - `timeSeconds` (integer) (required): Time spent in seconds (e.g., 3600 for 1 hour)
+
+        **change_status**
+        Transition a Jira issue to a new status
+        Parameters:
+        - `issueKey` (string) (required): Issue key (e.g., 'SETI-123')
+        - `newStatus` (string) (required): Target status name (e.g., 'In Progress', 'Done')
+
+        **add_comment**
+        Add a comment to a Jira issue
+        Parameters:
+        - `issueKey` (string) (required): Issue key (e.g., 'SETI-123')
+        - `comment` (string) (required): Comment text to add
+
+        **assign_issue**
+        Assign a Jira issue to a user
+        Parameters:
+        - `issueKey` (string) (required): Issue key (e.g., 'SETI-123')
+        - `assignee` (string) (required): User email or account ID
+
+        **delete_issue**
+        Delete a Jira issue (use with caution)
+        Parameters:
+        - `issueKey` (string) (required): Issue key (e.g., 'SETI-123')
+
+        **get_components**
+        Get available components for a Jira project
+        Parameters:
+        - `projectKey` (string) (required): Project key (e.g., 'SETI')
+
+        **get_transitions**
+        Get available status transitions for a Jira issue
+        Parameters:
+        - `issueKey` (string) (required): Issue key (e.g., 'SETI-123')
+
+        **fetch_changelog**
+        Get the change history for a Jira issue
+        Parameters:
+        - `issueKey` (string) (required): Issue key (e.g., 'SETI-123')
+
+        **link_issues**
+        Create a link between two Jira issues
+        Parameters:
+        - `issueKey` (string) (required): Source issue key (e.g., 'SETI-123')
+        - `linkedIssue` (string) (required): Target issue key to link to
+        - `linkType` (string) (required): Link type (e.g., 'blocks', 'relates to')
+
+        **add_watcher**
+        Add a user as a watcher on a Jira issue
+        Parameters:
+        - `issueKey` (string) (required): Issue key (e.g., 'SETI-123')
+        - `watcher` (string) (required): User email or account ID
+
+        **update_classification**
+        Update the Request Classification field on a Jira issue
+        Parameters:
+        - `issueKey` (string) (required): Issue key (e.g., 'SETI-123')
+        - `parentValue` (string) (required): Parent category value
+        - `childValue` (string) (optional): Child sub-category value
+
+        **update_pcm**
+        Update the PCM Master field on a Jira issue
+        Parameters:
+        - `issueKey` (string) (required): Issue key (e.g., 'SETI-123')
+        - `objectId` (string) (required): PCM object ID
+
+        """
         return prompt
     }
 
     /// Generate example action format for the system prompt
-    func generateActionFormatPrompt() -> String {
+    /// This method is nonisolated to allow calling from non-MainActor contexts
+    nonisolated func generateActionFormatPrompt() -> String {
         return """
         ## Action Format
 

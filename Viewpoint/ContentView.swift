@@ -1638,9 +1638,11 @@ struct QuickCreateIssueView: View {
                     isPresented = false
                 },
                 isBordered: true,
-                focusOnAppear: true
+                focusOnAppear: true,
+                minHeight: 22,
+                maxHeight: 22
             )
-            .frame(width: 350, height: 22)
+            .frame(width: 350)
 
             if !defaultProject.isEmpty {
                 HStack(spacing: 4) {

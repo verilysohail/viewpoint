@@ -106,14 +106,35 @@ class AIService {
                 switch result {
                 case .success(let usage):
                     Logger.shared.info("AI full response: \(fullResponse)")
+
+                    // Try new JSON-based actions first
+                    let actions = self.parseActions(from: fullResponse)
+
+                    // Fall back to legacy intents if no actions found
                     let intents = self.parseIntents(from: fullResponse)
-                    Logger.shared.info("Parsed \(intents.count) intents from response")
-                    let response = AIResponse(
-                        text: fullResponse,
-                        intents: intents,
-                        inputTokens: usage.inputTokens,
-                        outputTokens: usage.outputTokens
-                    )
+
+                    Logger.shared.info("Parsed \(actions.count) actions and \(intents.count) legacy intents from response")
+
+                    // Clean the response text (remove action/command lines)
+                    let cleanedText = self.cleanResponseText(fullResponse)
+
+                    // Create response - prefer actions if available
+                    let response: AIResponse
+                    if !actions.isEmpty {
+                        response = AIResponse(
+                            text: cleanedText,
+                            actions: actions,
+                            inputTokens: usage.inputTokens,
+                            outputTokens: usage.outputTokens
+                        )
+                    } else {
+                        response = AIResponse(
+                            text: cleanedText,
+                            intents: intents,
+                            inputTokens: usage.inputTokens,
+                            outputTokens: usage.outputTokens
+                        )
+                    }
                     onComplete(.success(response))
 
                 case .failure(let error):
@@ -193,189 +214,40 @@ class AIService {
             selectedIssuesSection = ""
         }
 
+        // Get tools from CapabilityRegistry
+        let toolsPrompt = CapabilityRegistry.shared.generateToolsPrompt()
+        let actionFormat = CapabilityRegistry.shared.generateActionFormatPrompt()
+
         return """
         You are Indigo, an AI assistant for Jira integrated into Viewpoint, a macOS Jira client.
 
-        Your role is to help users manage their Jira issues using natural language. You can:
-        1. Search for issues using JQL (Jira Query Language)
-        2. Update issue fields (status, assignee, estimates, etc.)
-        3. Create new issues
-        4. Log work on issues
-        5. Provide summaries and insights
+        Your role is to help users manage their Jira issues using natural language. You can search for issues, update fields, create new issues, log work, and more.
         \(selectedIssuesSection)
 
-        CURRENT CONTEXT:
+        ## Current Context
         - Current user: \(context.currentUser)
-        - Available projects: \(context.availableProjects.joined(separator: ", "))
+        - Available projects: \(context.availableProjects.prefix(20).joined(separator: ", "))\(context.availableProjects.count > 20 ? " (and \(context.availableProjects.count - 20) more)" : "")
         - Available statuses: \(context.availableStatuses.joined(separator: ", "))
         - Available resolutions: \(context.availableResolutions.joined(separator: ", "))
         - Active filters: \(describeFilters(context.currentFilters))
         - Visible issues: \(context.visibleIssues.count) issues currently loaded
-        - Available sprints (with dates):
-          \(context.availableSprints.map { "\($0.name) (ID: \($0.id), \($0.startDate ?? "no start") - \($0.endDate ?? "no end"), state: \($0.state))" }.joined(separator: "\n          "))
+        - Available sprints (active/future only):
+          \(context.availableSprints.filter { $0.state.lowercased() != "closed" }.prefix(10).map { "\($0.name) (ID: \($0.id), state: \($0.state))" }.joined(separator: "\n          "))
 
-        ANSWERING QUESTIONS:
-        When the user asks questions about selected issues (e.g., "what is this about?", "summarize this", "who worked on this?", "what are the comments?"), you should:
-        1. Use the SELECTED ISSUE DETAILS above to answer directly in natural language
-        2. Do NOT use DETAIL: command for simple questions - you already have the information
-        3. Only use DETAIL: if you need more information than what's provided above
-        4. Be conversational and helpful when answering questions
+        ## Answering Questions
+        When the user asks questions about selected issues (e.g., "what is this about?", "summarize this"), use the SELECTED ISSUE DETAILS above to answer directly. Be conversational and helpful.
 
-        IMPORTANT INSTRUCTIONS:
-        You can perform these Jira operations by including special format markers in your response:
+        \(actionFormat)
 
-        1. SEARCH: Generate JQL queries
-           Format: `JQL: <query>`
-           Example: JQL: assignee = currentUser() AND sprint in openSprints()
+        \(toolsPrompt)
 
-        2. CREATE: Create new issues
-           Format: `CREATE: project=X | summary=Y | type=Z | ...`
-           Available fields:
-           - project: Project key (required)
-           - summary: Issue summary (required)
-           - type: Issue type (Bug, Story, Task, etc.)
-           - assignee: User email (use \(context.currentUser) for yourself)
-           - estimate: Time estimate (e.g., "30m", "2h", "1d")
-           - sprint: Sprint name or "current" for active sprint
-           - epic: Epic name or key
-           - components: Component names (comma-separated)
-           - priority: Priority level
-           - labels: Labels (comma-separated)
-           Example: CREATE: project=SETI | summary=Fix bug | type=Bug | assignee=\(context.currentUser) | estimate=2h | sprint=current | components=Management Tasks
-
-        3. UPDATE: Update issue fields (summary, description, assignee, priority, labels, components, estimates, sprint, epic, status, resolution, pcmmaster)
-           Format: `UPDATE: <key> | field=value | field2=value2`
-           Example: UPDATE: SETI-123 | summary=New title | priority=High | labels=urgent,bug
-
-           PCM MASTER FIELD:
-           - pcmmaster: Set the PCM Master CMDB field (e.g., pcmmaster=Loom, pcmmaster=Slack)
-           - Use "none" to clear the field: pcmmaster=none
-           - The system will search for matching PCM Master entries by name
-
-           STATUS UPDATES WITH RESOLUTION:
-           When closing/cancelling an issue, ALWAYS use both status and resolution:
-           - For status field: Use natural language like "close", "closed", "done" - the system will match to correct transition
-           - For resolution field: Match to available resolutions from CURRENT CONTEXT (Done, Won't Do, Cancelled, etc.)
-
-           Examples:
-           - User says "cancel this" → UPDATE: SETI-123 | status=close | resolution=Cancelled
-           - User says "close as won't do" → UPDATE: SETI-123 | status=close | resolution=Won't Do
-           - User says "mark as done" → UPDATE: SETI-123 | status=close | resolution=Done
-           - User says "complete this" → UPDATE: SETI-123 | status=close | resolution=Done
-
-           For other status changes (not closing):
-           - "start this" → UPDATE: SETI-123 | status=in progress
-           - "put on hold" → UPDATE: SETI-123 | status=on hold
-
-        4. COMMENT: Add comment to issue
-           Format: `COMMENT: <key> | <comment text>`
-           Example: COMMENT: SETI-123 | This issue is blocked by SETI-100
-
-        5. LOG WORK: Log time spent
-           Format: `LOG: <key> | time=<duration>`
-           Example: LOG: SETI-123 | time=2h
-
-        6. ASSIGN: Assign issue to user
-           Format: `ASSIGN: <key> | <email>`
-           Example: ASSIGN: SETI-123 | \(context.currentUser)
-
-        7. DELETE: Delete an issue
-           Format: `DELETE: <key>`
-           Example: DELETE: SETI-123
-
-        8. WATCH: Add watcher to issue
-           Format: `WATCH: <key> | <email>`
-           Example: WATCH: SETI-123 | \(context.currentUser)
-
-        9. LINK: Link two issues
-           Format: `LINK: <key> | <linked-key> | <link-type>`
-           Link types: Blocks, Relates to, Duplicates, Clones
-           Example: LINK: SETI-123 | SETI-124 | Blocks
-
-        10. CHANGELOG: Fetch change history for issue
-           Format: `CHANGELOG: <key>`
-           Example: CHANGELOG: SETI-123
-
-        11. DETAIL: Open detailed view of issue with comments, history, and all data
-           Format: `DETAIL: <key>`
-           Example: DETAIL: SETI-123
-           Use this when user asks for "details", "full information", "comments", or "show me" an issue
-
-        12. GET_TRANSITIONS: Query available transitions and resolutions for an issue
-           Format: `GET_TRANSITIONS: <key>`
-           Example: GET_TRANSITIONS: SETI-123
-           Returns available status transitions and their required fields (like resolution values)
-           IMPORTANT: Use this BEFORE updating status when user mentions closing/cancelling with specific resolutions
-           This tells you exactly which transitions are available and what resolution values you can use
-
-        13. SPRINT: Look up sprint information (NOT via JQL - sprints are not issues!)
-           Format: `SPRINT: <query>`
-           Examples:
-           - SPRINT: find sprint for first week of January
-           - SPRINT: what sprints are active in SETI?
-           - SPRINT: show me Sprint 42 details
-           - SPRINT: what is the ID of the current sprint?
-           The system will search available sprints and return matching sprint details inline.
-
-        CRITICAL - SPRINTS ARE NOT ISSUES:
-        - Sprints CANNOT be found using JQL search - JQL returns issues only
-        - Viewpoint cannot display sprints in the issue list
-        - When users ask about sprints (find a sprint, sprint ID, sprint dates), use the SPRINT: command above
-        - You CAN still assign issues to sprints using UPDATE: issueKey | sprint=SprintName
-        - The available sprints with their IDs and dates are listed above in CURRENT CONTEXT
-
-        14. COMPONENTS: Look up available components for a project
-           Format: `COMPONENTS: <projectKey>`
-           Examples:
-           - COMPONENTS: SETI
-           - COMPONENTS: PROJ
-           Returns all components configured for the project, including their descriptions and leads.
-           Use this when users ask "what components are available for X?" or "show me components in X"
-
-        15. CLASSIFY: Search and set Request Classification (cascading select field)
-           This is a TWO-STEP process:
-           Step 1 - Search: `CLASSIFY: <issueKey> | <search query>`
-           Example: CLASSIFY: SETI-123 | software
-           This searches for classification options matching the query and presents numbered options.
-
-           Step 2 - Select: `SELECT_CLASSIFICATION: <issueKey> | <option number>`
-           Example: SELECT_CLASSIFICATION: SETI-123 | 2
-           When the user says "1", "option 1", "go with 1", "the first one", etc., use this to select.
-
-           Use this when users say things like:
-           - "classify this as software related"
-           - "set the classification to something about hardware"
-           - "mark this as a network issue"
-
-        16. PCM: Search and set PCM Master (CMDB field)
-           This is a TWO-STEP process:
-           Step 1 - Search: `PCM: <issueKey> | <search query>`
-           Example: PCM: SETI-123 | slack
-           This searches for PCM Master options matching the query and presents numbered options.
-
-           Step 2 - Select: `SELECT_PCM: <issueKey> | <option number>`
-           Example: SELECT_PCM: SETI-123 | 1
-           When the user says "1", "option 1", "go with 1", "the first one", etc., use this to select.
-
-           Use this when users say things like:
-           - "set PCM to Slack"
-           - "link this to Atlassian"
-           - "associate with Loom"
-
-        MULTI-TURN SELECTION:
-        When you present numbered options and the user responds with just a number or "option X" or "go with X":
-        - For classification: use SELECT_CLASSIFICATION with the stored issue key and option number
-        - For PCM: use SELECT_PCM with the stored issue key and option number
-        The system remembers which issue and options were presented, so you just need to pass the number.
-
-        IMPORTANT:
-        - Always explain what you're doing in plain language alongside the operation
-        - You can update multiple fields in one UPDATE command
-        - For sprint, use "sprint=current" to assign to the active sprint for that project
-        - When creating issues, the sprint will be automatically scoped to the project's board
-        - For estimates, use format like "30m", "2h", "1d" (minutes, hours, days)
+        ## Important Guidelines
+        - Always explain what you're doing in plain language alongside the action
+        - When closing/resolving issues, include both status and resolution fields
+        - For time logging, convert durations to seconds (1h = 3600, 2h = 7200, etc.)
+        - For estimates, pass time strings like "2h" or "30m" directly
+        - Use "currentUser()" in JQL for the current user's issues
         - Be concise and helpful
-        - Confirm the operation after completion
 
         Respond naturally and help the user accomplish their Jira tasks efficiently.
         """
@@ -683,9 +555,15 @@ class AIService {
         for line in lines {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
 
-            // JQL Search
-            if trimmed.hasPrefix("JQL:") {
-                let jql = trimmed.replacingOccurrences(of: "JQL:", with: "").trimmingCharacters(in: .whitespaces)
+            // JQL Search (handle both "JQL:" and "SEARCH:" prefixes)
+            if trimmed.hasPrefix("JQL:") || trimmed.hasPrefix("SEARCH:") {
+                var jql = trimmed
+                if jql.hasPrefix("JQL:") {
+                    jql = jql.replacingOccurrences(of: "JQL:", with: "")
+                } else {
+                    jql = jql.replacingOccurrences(of: "SEARCH:", with: "")
+                }
+                jql = jql.trimmingCharacters(in: .whitespaces)
                 intents.append(.search(jql: jql))
                 continue
             }
@@ -893,6 +771,69 @@ class AIService {
         }
 
         return intents
+    }
+
+    // MARK: - Action Parsing (New JSON-based system)
+
+    private func parseActions(from response: String) -> [AIAction] {
+        // Look for ACTION: lines with JSON payload
+        let lines = response.components(separatedBy: "\n")
+        var actions: [AIAction] = []
+
+        for line in lines {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+
+            // Parse ACTION: {"tool": "...", "args": {...}}
+            if trimmed.hasPrefix("ACTION:") {
+                let jsonPart = trimmed.replacingOccurrences(of: "ACTION:", with: "").trimmingCharacters(in: .whitespaces)
+
+                // Try to parse as JSON
+                guard let jsonData = jsonPart.data(using: .utf8) else {
+                    Logger.shared.warning("Failed to convert ACTION to data: \(jsonPart)")
+                    continue
+                }
+
+                do {
+                    let action = try JSONDecoder().decode(AIAction.self, from: jsonData)
+                    actions.append(action)
+                    Logger.shared.debug("Parsed action: \(action.tool) with args: \(action.arguments)")
+                } catch {
+                    Logger.shared.warning("Failed to parse ACTION JSON: \(error.localizedDescription) - \(jsonPart)")
+                }
+            }
+        }
+
+        return actions
+    }
+
+    /// Clean the AI response text by removing ACTION: lines
+    private func cleanResponseText(_ response: String) -> String {
+        let lines = response.components(separatedBy: "\n")
+        let cleanedLines = lines.filter { line in
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            // Remove action lines and legacy command lines
+            return !trimmed.hasPrefix("ACTION:") &&
+                   !trimmed.hasPrefix("JQL:") &&
+                   !trimmed.hasPrefix("SEARCH:") &&
+                   !trimmed.hasPrefix("UPDATE:") &&
+                   !trimmed.hasPrefix("CREATE:") &&
+                   !trimmed.hasPrefix("LOG:") &&
+                   !trimmed.hasPrefix("COMMENT:") &&
+                   !trimmed.hasPrefix("DELETE:") &&
+                   !trimmed.hasPrefix("ASSIGN:") &&
+                   !trimmed.hasPrefix("WATCH:") &&
+                   !trimmed.hasPrefix("LINK:") &&
+                   !trimmed.hasPrefix("CHANGELOG:") &&
+                   !trimmed.hasPrefix("DETAIL:") &&
+                   !trimmed.hasPrefix("GET_TRANSITIONS:") &&
+                   !trimmed.hasPrefix("SPRINT:") &&
+                   !trimmed.hasPrefix("COMPONENTS:") &&
+                   !trimmed.hasPrefix("CLASSIFY:") &&
+                   !trimmed.hasPrefix("SELECT_CLASSIFICATION:") &&
+                   !trimmed.hasPrefix("PCM:") &&
+                   !trimmed.hasPrefix("SELECT_PCM:")
+        }
+        return cleanedLines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private func parseTimeString(_ timeString: String) -> Int? {

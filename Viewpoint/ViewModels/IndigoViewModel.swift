@@ -135,12 +135,24 @@ class IndigoViewModel: ObservableObject {
                             )
                         }
 
-                        // Execute any Jira operations from the intents sequentially
-                        Logger.shared.info("Executing \(response.intents.count) intents")
-                        Task {
-                            for intent in response.intents {
-                                Logger.shared.info("Executing intent: \(intent)")
-                                await self.executeIntent(intent)
+                        // Execute actions or intents
+                        if !response.actions.isEmpty {
+                            // New: Execute JSON-based actions via CapabilityRegistry
+                            Logger.shared.info("Executing \(response.actions.count) actions via CapabilityRegistry")
+                            Task {
+                                for action in response.actions {
+                                    Logger.shared.info("Executing action: \(action.tool)")
+                                    await self.executeAction(action)
+                                }
+                            }
+                        } else if !response.intents.isEmpty {
+                            // Legacy: Execute parsed intents
+                            Logger.shared.info("Executing \(response.intents.count) legacy intents")
+                            Task {
+                                for intent in response.intents {
+                                    Logger.shared.info("Executing intent: \(intent)")
+                                    await self.executeIntent(intent)
+                                }
                             }
                         }
 
@@ -160,6 +172,78 @@ class IndigoViewModel: ObservableObject {
             }
         )
     }
+
+    // MARK: - Action Execution (New JSON-based system)
+
+    private func executeAction(_ action: AIAction) async {
+        Logger.shared.info("Executing action: \(action.tool) with args: \(action.arguments)")
+
+        // Show executing message
+        addMessage(Message(
+            text: "⚡ Executing: \(action.tool)",
+            sender: .system,
+            status: .processing
+        ))
+
+        do {
+            let result = try await CapabilityRegistry.shared.execute(
+                toolName: action.tool,
+                arguments: action.arguments
+            )
+
+            if result.success {
+                // Special handling for search results - update the main window
+                if action.tool == "search_issues" {
+                    let issueCount = jiraService.issues.count
+                    if issueCount > 0 {
+                        addMessage(Message(
+                            text: "✓ Found \(issueCount) issue\(issueCount == 1 ? "" : "s"). Results displayed in main window.",
+                            sender: .system,
+                            status: .success
+                        ))
+                    } else {
+                        addMessage(Message(
+                            text: "No issues found matching this search.",
+                            sender: .system,
+                            status: .warning
+                        ))
+                    }
+                } else if let message = result.message {
+                    addMessage(Message(
+                        text: "✓ \(message)",
+                        sender: .system,
+                        status: .success
+                    ))
+                } else {
+                    addMessage(Message(
+                        text: "✓ \(action.tool) completed successfully",
+                        sender: .system,
+                        status: .success
+                    ))
+                }
+
+                // If data was returned, we could display it here
+                if let data = result.data {
+                    Logger.shared.debug("Action \(action.tool) returned data: \(data)")
+                }
+            } else {
+                addMessage(Message(
+                    text: "✗ \(result.message ?? "Action failed")",
+                    sender: .system,
+                    status: .error
+                ))
+            }
+        } catch {
+            Logger.shared.error("Action execution error: \(error)")
+            addMessage(Message(
+                text: "✗ Error: \(error.localizedDescription)",
+                sender: .system,
+                status: .error
+            ))
+        }
+    }
+
+    // MARK: - Intent Execution (Legacy system)
 
     private func executeIntent(_ intent: AIResponse.Intent) async {
         switch intent {
