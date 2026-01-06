@@ -43,6 +43,7 @@
 		AA0012 /* IssueDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0014 /* IssueDetailView.swift */; };
 		B32940 /* SavedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B4DE6 /* SavedView.swift */; };
 		C12345 /* SubmittableTextField.swift in Sources */ = {isa = PBXBuildFile; fileRef = D12345 /* SubmittableTextField.swift */; };
+		E12345 /* MultilineTextField.swift in Sources */ = {isa = PBXBuildFile; fileRef = F12345 /* MultilineTextField.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -84,6 +85,7 @@
 		BB0014 /* IssueDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IssueDetailView.swift; sourceTree = "<group>"; };
 		CC0001 /* Viewpoint.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Viewpoint.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		D12345 /* SubmittableTextField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubmittableTextField.swift; sourceTree = "<group>"; };
+		F12345 /* MultilineTextField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MultilineTextField.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -171,6 +173,7 @@
 			isa = PBXGroup;
 			children = (
 				D12345 /* SubmittableTextField.swift */,
+				F12345 /* MultilineTextField.swift */,
 				A693ABEF2EE7AB4C00768F00 /* MentionTextField.swift */,
 				A693ABF22EEA123400768F00 /* UserSelector.swift */,
 				A693ABF42EEA234500768F00 /* PCMMasterSelector.swift */,
@@ -312,6 +315,7 @@
 				A6BACF672ED7C002000A4D2B /* JQLAutocomplete.swift in Sources */,
 				A6CBA4BB2ED0395200528322 /* AudioRecorder.swift in Sources */,
 				C12345 /* SubmittableTextField.swift in Sources */,
+				E12345 /* MultilineTextField.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

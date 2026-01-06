@@ -1638,9 +1638,7 @@ struct QuickCreateIssueView: View {
                     isPresented = false
                 },
                 isBordered: true,
-                focusOnAppear: true,
-                minHeight: 22,
-                maxHeight: 22
+                focusOnAppear: true
             )
             .frame(width: 350)
 

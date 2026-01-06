@@ -1771,6 +1771,18 @@ class JiraService: ObservableObject {
                     }
                 }
 
+            case "parent":
+                // Handle parent field for hierarchy (e.g., Epic -> Initiative)
+                if let parentDict = value as? [String: Any] {
+                    // Already in correct format: {"key": "PARENT-123"}
+                    jiraFields["parent"] = parentDict
+                    Logger.shared.info("Setting parent to: \(parentDict)")
+                } else if let parentKey = value as? String {
+                    // Just the key string
+                    jiraFields["parent"] = ["key": parentKey]
+                    Logger.shared.info("Setting parent to key: \(parentKey)")
+                }
+
             case "pcmmaster", "pcm master", "pcm_master", "customfield_11920":
                 if let pcmValue = value as? String {
                     if pcmValue.lowercased() == "none" || pcmValue.lowercased() == "null" || pcmValue.isEmpty {
