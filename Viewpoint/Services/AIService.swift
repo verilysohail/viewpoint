@@ -66,6 +66,38 @@ class AIService {
         }
     }
 
+    /// Send message with action history for ReAct pattern continuation
+    func sendMessageWithActionHistory(
+        userGoal: String,
+        actionHistory: [(action: AIAction, result: ToolResult)],
+        conversationHistory: [Message],
+        onChunk: @escaping (String) -> Void,
+        onComplete: @escaping (Result<AIResponse, Error>) -> Void
+    ) {
+        guard let client = client else {
+            onComplete(.failure(VertexAIError.missingCredentials))
+            return
+        }
+
+        // Build conversation context with action history
+        Task {
+            let context = await buildContext(actionHistory: actionHistory, userGoal: userGoal)
+            let systemPrompt = buildSystemPrompt(context: context)
+
+            // Continuation message asks AI to analyze results and decide next steps
+            let continuationMessage = "Based on the action results above, what should I do next to complete the goal?"
+
+            await sendMessageWithContext(
+                client: client,
+                systemPrompt: systemPrompt,
+                userMessage: continuationMessage,
+                conversationHistory: conversationHistory,
+                onChunk: onChunk,
+                onComplete: onComplete
+            )
+        }
+    }
+
     private func sendMessageWithContext(
         client: VertexAIClient,
         systemPrompt: String,
@@ -113,7 +145,10 @@ class AIService {
                     // Fall back to legacy intents if no actions found
                     let intents = self.parseIntents(from: fullResponse)
 
-                    Logger.shared.info("Parsed \(actions.count) actions and \(intents.count) legacy intents from response")
+                    // Detect if task is complete (ReAct pattern)
+                    let taskComplete = self.detectTaskComplete(from: fullResponse)
+
+                    Logger.shared.info("Parsed \(actions.count) actions and \(intents.count) legacy intents from response (taskComplete: \(taskComplete))")
 
                     // Clean the response text (remove action/command lines)
                     let cleanedText = self.cleanResponseText(fullResponse)
@@ -124,6 +159,7 @@ class AIService {
                         response = AIResponse(
                             text: cleanedText,
                             actions: actions,
+                            taskComplete: taskComplete,
                             inputTokens: usage.inputTokens,
                             outputTokens: usage.outputTokens
                         )
@@ -146,7 +182,10 @@ class AIService {
 
     // MARK: - Context Building
 
-    private func buildContext() async -> AIContext {
+    private func buildContext(
+        actionHistory: [(action: AIAction, result: ToolResult)]? = nil,
+        userGoal: String? = nil
+    ) async -> AIContext {
         let currentUser = UserDefaults.standard.string(forKey: "jiraEmail") ?? "unknown"
 
         // Get selected issues by mapping IDs to actual issues
@@ -186,7 +225,9 @@ class AIService {
             availableStatuses: statuses,
             availableResolutions: resolutions,
             lastSearchResults: nil,
-            lastCreatedIssue: nil
+            lastCreatedIssue: nil,
+            actionHistory: actionHistory,
+            userGoal: userGoal
         )
     }
 
@@ -214,6 +255,53 @@ class AIService {
             selectedIssuesSection = ""
         }
 
+        // Build action history feedback section (for ReAct pattern)
+        let actionHistorySection: String
+        if let history = context.actionHistory, !history.isEmpty, let goal = context.userGoal {
+            var historyText = """
+
+            ⚡ PREVIOUS ACTIONS TAKEN (ReAct Loop):
+            User's Goal: "\(goal)"
+
+            You have already taken these actions toward the goal:
+
+            """
+
+            for (index, (action, result)) in history.enumerated() {
+                let statusIcon = result.success ? "✓" : "✗"
+                let status = result.success ? "Success" : "Failed"
+                historyText += """
+                \(index + 1). \(action.tool) \(statusIcon) \(status)
+                   Args: \(action.arguments.map { "\($0.key)=\($0.value)" }.joined(separator: ", "))
+                   Result: \(result.message ?? "No message")
+
+                """
+
+                // Include data if it provides useful information
+                if let data = result.data {
+                    if let issuesData = data as? [String: Any],
+                       let issues = issuesData["issues"] as? [[String: Any]],
+                       !issues.isEmpty {
+                        historyText += "   Found Issues: \(issues.compactMap { $0["key"] as? String }.joined(separator: ", "))\n"
+                    } else if let issueKey = data as? String {
+                        historyText += "   Issue Key: \(issueKey)\n"
+                    }
+                }
+            }
+
+            historyText += """
+
+            IMPORTANT: Based on these results, determine if you need to take additional actions to FULLY complete the user's goal.
+            - If more work is needed, generate the next action(s) using the data from above.
+            - If the goal is FULLY achieved, respond with your summary and end with: TASK_COMPLETE
+
+            """
+
+            actionHistorySection = historyText
+        } else {
+            actionHistorySection = ""
+        }
+
         // Get tools from CapabilityRegistry
         let toolsPrompt = CapabilityRegistry.shared.generateToolsPrompt()
         let actionFormat = CapabilityRegistry.shared.generateActionFormatPrompt()
@@ -222,7 +310,7 @@ class AIService {
         You are Indigo, an AI assistant for Jira integrated into Viewpoint, a macOS Jira client.
 
         Your role is to help users manage their Jira issues using natural language. You can search for issues, update fields, create new issues, log work, and more.
-        \(selectedIssuesSection)
+        \(selectedIssuesSection)\(actionHistorySection)
 
         ## Current Context
         - Current user: \(context.currentUser)
@@ -804,6 +892,15 @@ class AIService {
         }
 
         return actions
+    }
+
+    /// Detect if AI has indicated the task is complete (ReAct pattern)
+    private func detectTaskComplete(from response: String) -> Bool {
+        let uppercased = response.uppercased()
+        return uppercased.contains("TASK_COMPLETE") ||
+               uppercased.contains("TASK COMPLETE") ||
+               uppercased.contains("GOAL COMPLETE") ||
+               uppercased.contains("GOAL ACHIEVED")
     }
 
     /// Clean the AI response text by removing ACTION: lines

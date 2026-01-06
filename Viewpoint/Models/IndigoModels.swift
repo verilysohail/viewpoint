@@ -86,6 +86,10 @@ struct AIContext {
     let availableResolutions: [String]
     let lastSearchResults: [JiraIssue]?
     let lastCreatedIssue: String?
+
+    // NEW: Action results for ReAct pattern feedback loop
+    let actionHistory: [(action: AIAction, result: ToolResult)]?
+    let userGoal: String?  // Original user request for context across iterations
 }
 
 // MARK: - AI Action (New JSON-based action system)
@@ -172,14 +176,16 @@ struct AIResponse {
     let text: String
     let actions: [AIAction]  // New: JSON-based actions
     let intents: [Intent]    // Legacy: Keep for backwards compatibility during migration
+    let taskComplete: Bool   // New: Did the AI indicate task is complete?
     let inputTokens: Int
     let outputTokens: Int
 
     /// Initialize with actions (new system)
-    init(text: String, actions: [AIAction], inputTokens: Int, outputTokens: Int) {
+    init(text: String, actions: [AIAction], taskComplete: Bool = false, inputTokens: Int, outputTokens: Int) {
         self.text = text
         self.actions = actions
         self.intents = []  // No legacy intents
+        self.taskComplete = taskComplete
         self.inputTokens = inputTokens
         self.outputTokens = outputTokens
     }
@@ -189,6 +195,7 @@ struct AIResponse {
         self.text = text
         self.actions = []  // No new actions
         self.intents = intents
+        self.taskComplete = false
         self.inputTokens = inputTokens
         self.outputTokens = outputTokens
     }

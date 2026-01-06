@@ -137,13 +137,14 @@ class IndigoViewModel: ObservableObject {
 
                         // Execute actions or intents
                         if !response.actions.isEmpty {
-                            // New: Execute JSON-based actions via CapabilityRegistry
-                            Logger.shared.info("Executing \(response.actions.count) actions via CapabilityRegistry")
+                            // New: Execute JSON-based actions via CapabilityRegistry with ReAct loop
+                            Logger.shared.info("Executing \(response.actions.count) actions via CapabilityRegistry (ReAct loop enabled)")
                             Task {
-                                for action in response.actions {
-                                    Logger.shared.info("Executing action: \(action.tool)")
-                                    await self.executeAction(action)
-                                }
+                                await self.executeAgenticLoop(
+                                    initialActions: response.actions,
+                                    initialTaskComplete: response.taskComplete,
+                                    userGoal: messageText
+                                )
                             }
                         } else if !response.intents.isEmpty {
                             // Legacy: Execute parsed intents
@@ -173,9 +174,80 @@ class IndigoViewModel: ObservableObject {
         )
     }
 
-    // MARK: - Action Execution (New JSON-based system)
+    // MARK: - Action Execution (New JSON-based system with ReAct Pattern)
 
-    private func executeAction(_ action: AIAction) async {
+    /// Execute the agentic loop (ReAct pattern) until task is complete
+    private func executeAgenticLoop(
+        initialActions: [AIAction],
+        initialTaskComplete: Bool,
+        userGoal: String
+    ) async {
+        var actionHistory: [(action: AIAction, result: ToolResult)] = []
+        var currentActions = initialActions
+        var taskComplete = initialTaskComplete
+        var iterations = 0
+        let maxIterations = 5  // Safety limit
+
+        Logger.shared.info("Starting agentic loop for goal: \(userGoal)")
+
+        while !taskComplete && iterations < maxIterations {
+            iterations += 1
+            Logger.shared.info("ReAct loop iteration \(iterations)")
+
+            // Execute current batch of actions
+            for action in currentActions {
+                let result = await executeActionAndGetResult(action)
+                actionHistory.append((action, result))
+            }
+
+            // Check if task is complete
+            if taskComplete || currentActions.isEmpty {
+                Logger.shared.info("Task complete after iteration \(iterations)")
+                break
+            }
+
+            // Ask AI for next steps based on results
+            guard let aiService = aiService else {
+                Logger.shared.warning("AI Service not available for continuation")
+                break
+            }
+
+            Logger.shared.info("Asking AI for next steps with \(actionHistory.count) action results")
+
+            let continuationResponse = await askAIForNextSteps(
+                userGoal: userGoal,
+                actionHistory: actionHistory,
+                aiService: aiService
+            )
+
+            taskComplete = continuationResponse.taskComplete
+            currentActions = continuationResponse.actions
+
+            if taskComplete {
+                // Show AI's completion message
+                addMessage(Message(
+                    text: continuationResponse.text,
+                    sender: .ai,
+                    status: .success
+                ))
+                Logger.shared.info("AI confirmed task complete")
+            }
+        }
+
+        if iterations >= maxIterations {
+            Logger.shared.warning("ReAct loop reached maximum iterations")
+            addMessage(Message(
+                text: "⚠️ Task execution stopped after reaching maximum iterations. Some steps may be incomplete.",
+                sender: .system,
+                status: .warning
+            ))
+        }
+
+        isProcessing = false
+    }
+
+    /// Execute a single action and return the result (for ReAct loop)
+    private func executeActionAndGetResult(_ action: AIAction) async -> ToolResult {
         Logger.shared.info("Executing action: \(action.tool) with args: \(action.arguments)")
 
         // Show executing message
@@ -233,6 +305,8 @@ class IndigoViewModel: ObservableObject {
                     status: .error
                 ))
             }
+
+            return result
         } catch {
             Logger.shared.error("Action execution error: \(error)")
             addMessage(Message(
@@ -240,6 +314,46 @@ class IndigoViewModel: ObservableObject {
                 sender: .system,
                 status: .error
             ))
+            return ToolResult.failure(error.localizedDescription)
+        }
+    }
+
+    /// Ask AI what to do next based on action results (ReAct pattern continuation)
+    private func askAIForNextSteps(
+        userGoal: String,
+        actionHistory: [(action: AIAction, result: ToolResult)],
+        aiService: AIService
+    ) async -> AIResponse {
+        // This is a continuation request - we just need the AI to analyze results and decide next steps
+        // The system prompt will include the action history via the context
+
+        return await withCheckedContinuation { continuation in
+            aiService.sendMessageWithActionHistory(
+                userGoal: userGoal,
+                actionHistory: actionHistory,
+                conversationHistory: messages,
+                onChunk: { [weak self] chunk in
+                    // We don't stream continuation responses to avoid clutter
+                    // Just collect them silently
+                    Logger.shared.debug("Continuation chunk: \(chunk)")
+                },
+                onComplete: { result in
+                    switch result {
+                    case .success(let response):
+                        continuation.resume(returning: response)
+                    case .failure(let error):
+                        Logger.shared.error("Continuation request failed: \(error)")
+                        // Return empty response with taskComplete = true to stop loop
+                        continuation.resume(returning: AIResponse(
+                            text: "Error getting next steps: \(error.localizedDescription)",
+                            actions: [],
+                            taskComplete: true,
+                            inputTokens: 0,
+                            outputTokens: 0
+                        ))
+                    }
+                }
+            )
         }
     }
 
