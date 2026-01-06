@@ -12,6 +12,9 @@ class IndigoViewModel: ObservableObject {
     @Published var modelStatus: String = ""
     @Published var selectedModel: AIModel
 
+    // Cancellation state for stopping execution
+    private var isCancelled: Bool = false
+
     // Confirmation state for bulk/destructive operations
     @Published var showConfirmationAlert: Bool = false
     @Published var confirmationMessage: String = ""
@@ -182,6 +185,19 @@ class IndigoViewModel: ObservableObject {
         )
     }
 
+    /// Stop all ongoing execution (like Ctrl-C)
+    func stopExecution() {
+        Logger.shared.info("User requested stop execution")
+        isCancelled = true
+        isProcessing = false
+
+        addMessage(Message(
+            text: "🛑 Execution stopped by user.",
+            sender: .system,
+            status: .warning
+        ))
+    }
+
     // MARK: - Action Execution (New JSON-based system with ReAct Pattern)
 
     /// Check if actions require user confirmation
@@ -264,6 +280,9 @@ class IndigoViewModel: ObservableObject {
 
         Logger.shared.info("Starting agentic loop for goal: \(userGoal)")
 
+        // Reset cancellation flag for new execution
+        isCancelled = false
+
         // Check if initial actions need confirmation
         let confirmationCheck = needsConfirmation(actions: initialActions)
         if confirmationCheck.needed {
@@ -285,8 +304,20 @@ class IndigoViewModel: ObservableObject {
             iterations += 1
             Logger.shared.info("ReAct loop iteration \(iterations)")
 
+            // Check if user cancelled execution
+            if isCancelled {
+                Logger.shared.info("Execution cancelled by user during iteration \(iterations)")
+                break
+            }
+
             // Execute current batch of actions
             for action in currentActions {
+                // Check for cancellation before each action
+                if isCancelled {
+                    Logger.shared.info("Execution cancelled before action: \(action.tool)")
+                    break
+                }
+
                 let result = await executeActionAndGetResult(action)
                 actionHistory.append((action, result))
             }

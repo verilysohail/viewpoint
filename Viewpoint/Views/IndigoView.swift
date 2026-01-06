@@ -214,65 +214,89 @@ struct IndigoView: View {
 
             Divider()
 
-            // Input Row
-            HStack(spacing: 12) {
-                // Microphone button
-                Button(action: { viewModel.toggleRecording() }) {
-                    Image(systemName: viewModel.isRecording ? "mic.fill" : "mic")
-                        .font(.system(size: 18))
-                        .foregroundColor(viewModel.isRecording ? .red : .white)
-                        .frame(width: 36, height: 36)
-                        .background(
-                            Group {
-                                if viewModel.isRecording {
-                                    Color.red.opacity(0.2)
-                                } else {
-                                    LinearGradient(
+            VStack(spacing: 0) {
+                // Input Row
+                HStack(spacing: 12) {
+                    // Microphone button
+                    Button(action: { viewModel.toggleRecording() }) {
+                        Image(systemName: viewModel.isRecording ? "mic.fill" : "mic")
+                            .font(.system(size: 18))
+                            .foregroundColor(viewModel.isRecording ? .red : .white)
+                            .frame(width: 36, height: 36)
+                            .background(
+                                Group {
+                                    if viewModel.isRecording {
+                                        Color.red.opacity(0.2)
+                                    } else {
+                                        LinearGradient(
+                                            colors: [Color(red: 0.31, green: 0.27, blue: 0.90), Color(red: 0.46, green: 0.39, blue: 1.0)],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
+                                    }
+                                }
+                            )
+                            .cornerRadius(18)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Voice input (Phase 2)")
+
+                    // Text input - multi-line with text wrapping
+                    MultilineTextField(
+                        "Type or speak your command...",
+                        text: $viewModel.inputText,
+                        onSubmit: {
+                            viewModel.sendMessage()
+                        },
+                        font: .systemFont(ofSize: NSFont.systemFontSize),
+                        minHeight: 36,
+                        maxHeight: 120,
+                        focusOnAppear: true
+                    )
+                    .cornerRadius(8)
+
+                    // Send button
+                    Button(action: { viewModel.sendMessage() }) {
+                        Image(systemName: "arrow.up.circle.fill")
+                            .font(.system(size: 28))
+                            .foregroundStyle(
+                                viewModel.inputText.isEmpty
+                                    ? LinearGradient(colors: [.gray], startPoint: .top, endPoint: .bottom)
+                                    : LinearGradient(
                                         colors: [Color(red: 0.31, green: 0.27, blue: 0.90), Color(red: 0.46, green: 0.39, blue: 1.0)],
                                         startPoint: .topLeading,
                                         endPoint: .bottomTrailing
                                     )
-                                }
-                            }
-                        )
-                        .cornerRadius(18)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(viewModel.inputText.isEmpty || viewModel.isProcessing)
+                    .help("Send message (⌘⏎)")
                 }
-                .buttonStyle(.plain)
-                .help("Voice input (Phase 2)")
+                .padding()
 
-                // Text input - multi-line with text wrapping
-                MultilineTextField(
-                    "Type or speak your command...",
-                    text: $viewModel.inputText,
-                    onSubmit: {
-                        viewModel.sendMessage()
-                    },
-                    font: .systemFont(ofSize: NSFont.systemFontSize),
-                    minHeight: 36,
-                    maxHeight: 120,
-                    focusOnAppear: true
-                )
-                .cornerRadius(8)
-
-                // Send button
-                Button(action: { viewModel.sendMessage() }) {
-                    Image(systemName: "arrow.up.circle.fill")
-                        .font(.system(size: 28))
-                        .foregroundStyle(
-                            viewModel.inputText.isEmpty
-                                ? LinearGradient(colors: [.gray], startPoint: .top, endPoint: .bottom)
-                                : LinearGradient(
-                                    colors: [Color(red: 0.31, green: 0.27, blue: 0.90), Color(red: 0.46, green: 0.39, blue: 1.0)],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                        )
+                // Stop button (only shown when processing)
+                if viewModel.isProcessing {
+                    Button(action: { viewModel.stopExecution() }) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "stop.circle.fill")
+                                .font(.system(size: 16))
+                            Text("Stop Execution")
+                                .font(.system(size: 13, weight: .medium))
+                        }
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background(Color.red)
+                        .cornerRadius(8)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Stop all tool execution (like Ctrl-C)")
+                    .padding(.bottom, 12)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
-                .buttonStyle(.plain)
-                .disabled(viewModel.inputText.isEmpty || viewModel.isProcessing)
-                .help("Send message (⌘⏎)")
             }
-            .padding()
+            .animation(.easeInOut(duration: 0.2), value: viewModel.isProcessing)
         }
         .background(Color(NSColor.windowBackgroundColor).opacity(0.5))
     }
