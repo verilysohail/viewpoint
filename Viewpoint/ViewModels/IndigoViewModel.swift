@@ -132,7 +132,6 @@ class IndigoViewModel: ObservableObject {
             onComplete: { [weak self] result in
                 Task { @MainActor in
                     guard let self = self else { return }
-                    self.isProcessing = false
 
                     switch result {
                     case .success(let response):
@@ -149,6 +148,7 @@ class IndigoViewModel: ObservableObject {
                         // Execute actions or intents
                         if !response.actions.isEmpty {
                             // New: Execute JSON-based actions via CapabilityRegistry with ReAct loop
+                            // Keep isProcessing = true during action execution
                             Logger.shared.info("Executing \(response.actions.count) actions via CapabilityRegistry (ReAct loop enabled)")
                             Task {
                                 await self.executeAgenticLoop(
@@ -159,13 +159,18 @@ class IndigoViewModel: ObservableObject {
                             }
                         } else if !response.intents.isEmpty {
                             // Legacy: Execute parsed intents
+                            // Keep isProcessing = true during intent execution
                             Logger.shared.info("Executing \(response.intents.count) legacy intents")
                             Task {
                                 for intent in response.intents {
                                     Logger.shared.info("Executing intent: \(intent)")
                                     await self.executeIntent(intent)
                                 }
+                                self.isProcessing = false
                             }
+                        } else {
+                            // No actions or intents - we're done
+                            self.isProcessing = false
                         }
 
                     case .failure(let error):
@@ -179,6 +184,9 @@ class IndigoViewModel: ObservableObject {
                         if let index = self.messages.firstIndex(where: { $0.id == aiMessageId }) {
                             self.messages.remove(at: index)
                         }
+
+                        // Error occurred - stop processing
+                        self.isProcessing = false
                     }
                 }
             }
