@@ -12,6 +12,14 @@ class IndigoViewModel: ObservableObject {
     @Published var modelStatus: String = ""
     @Published var selectedModel: AIModel
 
+    // Confirmation state for bulk/destructive operations
+    @Published var showConfirmationAlert: Bool = false
+    @Published var confirmationMessage: String = ""
+    @Published var confirmationDetails: String = ""
+    private var pendingConfirmationActions: [AIAction] = []
+    private var pendingConfirmationUserGoal: String = ""
+    private var confirmationContinuation: CheckedContinuation<Bool, Never>?
+
     // Pending options for multi-turn selection
     private var pendingClassificationOptions: [(display: String, parentValue: String, childValue: String?)] = []
     private var pendingClassificationIssueKey: String?
@@ -176,6 +184,72 @@ class IndigoViewModel: ObservableObject {
 
     // MARK: - Action Execution (New JSON-based system with ReAct Pattern)
 
+    /// Check if actions require user confirmation
+    private func needsConfirmation(actions: [AIAction]) -> (needed: Bool, message: String, details: String) {
+        // Count actions affecting multiple issues
+        let bulkActions = actions.filter { action in
+            ["update_issue", "assign_issue", "delete_issue", "change_status", "add_comment"].contains(action.tool)
+        }
+
+        // Check for destructive operations
+        let destructiveActions = actions.filter { action in
+            action.tool == "delete_issue"
+        }
+
+        // Bulk operation check (>5 issues)
+        if bulkActions.count > 5 {
+            let actionSummary = Dictionary(grouping: bulkActions, by: { $0.tool })
+                .map { "\($0.value.count) × \($0.key.replacingOccurrences(of: "_", with: " "))" }
+                .joined(separator: "\n")
+
+            return (
+                needed: true,
+                message: "Confirm Bulk Operation",
+                details: "This will affect \(bulkActions.count) issues:\n\n\(actionSummary)\n\nAre you sure you want to proceed?"
+            )
+        }
+
+        // Destructive operation check
+        if !destructiveActions.isEmpty {
+            let issueKeys = destructiveActions.compactMap { $0.arguments["issueKey"] as? String }
+            let issueList = issueKeys.isEmpty ? "\(destructiveActions.count) issue(s)" : issueKeys.joined(separator: ", ")
+
+            return (
+                needed: true,
+                message: "Confirm Deletion",
+                details: "This will permanently delete:\n\n\(issueList)\n\nThis action cannot be undone. Are you sure?"
+            )
+        }
+
+        return (needed: false, message: "", details: "")
+    }
+
+    /// Wait for user confirmation
+    private func waitForConfirmation(message: String, details: String) async -> Bool {
+        await withCheckedContinuation { continuation in
+            self.confirmationMessage = message
+            self.confirmationDetails = details
+            self.confirmationContinuation = continuation
+            self.showConfirmationAlert = true
+        }
+    }
+
+    /// User responded to confirmation
+    func confirmAction(_ confirmed: Bool) {
+        showConfirmationAlert = false
+        confirmationContinuation?.resume(returning: confirmed)
+        confirmationContinuation = nil
+
+        if !confirmed {
+            addMessage(Message(
+                text: "❌ Operation cancelled by user.",
+                sender: .system,
+                status: .warning
+            ))
+            isProcessing = false
+        }
+    }
+
     /// Execute the agentic loop (ReAct pattern) until task is complete
     private func executeAgenticLoop(
         initialActions: [AIAction],
@@ -189,6 +263,23 @@ class IndigoViewModel: ObservableObject {
         let maxIterations = 5  // Safety limit
 
         Logger.shared.info("Starting agentic loop for goal: \(userGoal)")
+
+        // Check if initial actions need confirmation
+        let confirmationCheck = needsConfirmation(actions: initialActions)
+        if confirmationCheck.needed {
+            Logger.shared.info("Actions require user confirmation")
+            let confirmed = await waitForConfirmation(
+                message: confirmationCheck.message,
+                details: confirmationCheck.details
+            )
+
+            if !confirmed {
+                Logger.shared.info("User cancelled operation")
+                return
+            }
+
+            Logger.shared.info("User confirmed operation")
+        }
 
         while !taskComplete && iterations < maxIterations {
             iterations += 1
@@ -222,6 +313,25 @@ class IndigoViewModel: ObservableObject {
 
             taskComplete = continuationResponse.taskComplete
             currentActions = continuationResponse.actions
+
+            // Check if new actions need confirmation
+            if !currentActions.isEmpty && !taskComplete {
+                let confirmationCheck = needsConfirmation(actions: currentActions)
+                if confirmationCheck.needed {
+                    Logger.shared.info("New actions require user confirmation")
+                    let confirmed = await waitForConfirmation(
+                        message: confirmationCheck.message,
+                        details: confirmationCheck.details
+                    )
+
+                    if !confirmed {
+                        Logger.shared.info("User cancelled continuation")
+                        break
+                    }
+
+                    Logger.shared.info("User confirmed continuation")
+                }
+            }
 
             // ALWAYS show what the AI says - this enables conversational back-and-forth
             // like Claude Code, where the AI explains its reasoning, summarizes results,

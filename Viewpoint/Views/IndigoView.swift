@@ -53,6 +53,16 @@ struct IndigoView: View {
             // Apply initial window floating state
             viewModel.setWindowFloating(viewModel.keepOnTop)
         }
+        .alert(viewModel.confirmationMessage, isPresented: $viewModel.showConfirmationAlert) {
+            Button("Cancel", role: .cancel) {
+                viewModel.confirmAction(false)
+            }
+            Button("Proceed", role: .destructive) {
+                viewModel.confirmAction(true)
+            }
+        } message: {
+            Text(viewModel.confirmationDetails)
+        }
     }
 
     private var headerView: some View {
