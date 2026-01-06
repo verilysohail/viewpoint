@@ -279,11 +279,18 @@ class AIService {
 
                 // Include data if it provides useful information
                 if let data = result.data {
-                    if let issuesData = data as? [String: Any],
+                    // Handle array of issue keys (from search_issues)
+                    if let issueKeys = data as? [String], !issueKeys.isEmpty {
+                        historyText += "   Found Issues: \(issueKeys.joined(separator: ", "))\n"
+                    }
+                    // Handle dictionary with issues array
+                    else if let issuesData = data as? [String: Any],
                        let issues = issuesData["issues"] as? [[String: Any]],
                        !issues.isEmpty {
                         historyText += "   Found Issues: \(issues.compactMap { $0["key"] as? String }.joined(separator: ", "))\n"
-                    } else if let issueKey = data as? String {
+                    }
+                    // Handle single issue key string
+                    else if let issueKey = data as? String {
                         historyText += "   Issue Key: \(issueKey)\n"
                     }
                 }
@@ -292,7 +299,11 @@ class AIService {
             historyText += """
 
             IMPORTANT: Based on these results, determine if you need to take additional actions to FULLY complete the user's goal.
-            - If more work is needed, generate the next action(s) using the data from above.
+            - If you found issue keys above, USE THEM in your next actions (e.g., assign_issue, update_issue)
+            - DO NOT search again for issues you've already found - use the keys from the results above
+            - When assigning to "me" or "the current user", use the email: \(context.currentUser)
+            - If multiple issues need the same operation, generate multiple actions (one per issue)
+            - If more work is needed, generate the next action(s) using the issue keys and data from above
             - If the goal is FULLY achieved, respond with your summary and end with: TASK_COMPLETE
 
             """
