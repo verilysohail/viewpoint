@@ -1102,12 +1102,13 @@ struct IssueEpicSelector: View {
                                             }
                                             .frame(maxWidth: .infinity, alignment: .leading)
                                             .padding(.horizontal, 12)
-                                        .padding(.vertical, 6)
-                                    }
-                                    .buttonStyle(.plain)
-                                    .background(currentParentKey == parent.key ? Color.accentColor.opacity(0.1) : Color.clear)
+                                            .padding(.vertical, 6)
+                                        }
+                                        .buttonStyle(.plain)
+                                        .background(currentParentKey == parent.key ? Color.accentColor.opacity(0.1) : Color.clear)
 
-                                    Divider()
+                                        Divider()
+                                    }
                                 }
                             }
                         }
@@ -1356,18 +1357,5 @@ struct IssueLogTimeButton: View {
                     .environmentObject(jiraService)
             }
         }
-    }
-}
-
-// MARK: - Environment Key for Refresh
-
-struct RefreshIssueDetailsKey: EnvironmentKey {
-    static let defaultValue: () -> Void = {}
-}
-
-extension EnvironmentValues {
-    var refreshIssueDetails: () -> Void {
-        get { self[RefreshIssueDetailsKey.self] }
-        set { self[RefreshIssueDetailsKey.self] = newValue }
     }
 }
