@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// A multi-line text field using native SwiftUI TextEditor.
-/// Enter submits, Shift+Enter adds a newline.
+/// User clicks send button to submit.
 struct MultilineTextField: View {
     @Binding var text: String
     let placeholder: String
@@ -37,38 +37,25 @@ struct MultilineTextField: View {
                     .allowsHitTesting(false)
             }
 
-            // TextEditor with Enter key handling
-            if #available(macOS 14.0, *) {
-                TextEditor(text: $text)
-                    .font(.body)
-                    .scrollContentBackground(.hidden)
-                    .background(Color.white)
-                    .foregroundColor(.black)
-                    .focused($isFocused)
-                    .frame(minHeight: minHeight, maxHeight: maxHeight)
-                    .onKeyPress { keyPress in
-                        if keyPress.key == .return && !keyPress.modifiers.contains(.shift) {
-                            // Enter without Shift: submit
-                            onSubmit()
-                            return .handled
-                        }
-                        // Shift+Enter or other keys: let it pass through
-                        return .ignored
-                    }
-            } else {
-                // Fallback for macOS 13 and earlier - no Enter key handling
-                // User must click the send button
-                TextEditor(text: $text)
-                    .font(.body)
-                    .scrollContentBackground(.hidden)
-                    .background(Color.white)
-                    .foregroundColor(.black)
-                    .focused($isFocused)
-                    .frame(minHeight: minHeight, maxHeight: maxHeight)
-            }
+            // TextEditor
+            TextEditor(text: $text)
+                .font(.body)
+                .scrollContentBackground(.hidden)
+                .background(Color.white)
+                .foregroundColor(.black)
+                .focused($isFocused)
+                .frame(minHeight: minHeight, maxHeight: maxHeight)
         }
         .onAppear {
             isFocused = true
         }
+        .background(
+            // Hidden button to capture Cmd+Enter
+            Button("") {
+                onSubmit()
+            }
+            .keyboardShortcut(.return, modifiers: .command)
+            .hidden()
+        )
     }
 }

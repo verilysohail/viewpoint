@@ -14,7 +14,8 @@ struct JiraIssue: Codable, Identifiable, Hashable {
     var reporter: String? { fields.reporter?.displayName }
     var issueType: String { fields.issuetype.name }
     var project: String { fields.project.name }
-    var epic: String? { fields.customfield_10014 } // Epic link field
+    var parentKey: String? { fields.parent?.key } // Parent issue key (Initiative for Epic, Epic for Story)
+    var epic: String? { fields.customfield_10014 } // Epic link field (legacy)
     var priority: String? { fields.priority?.name }
     var pcmMaster: CMDBObjectField? { fields.customfield_11920?.first } // PCM Master (CMDB)
     var requestClassification: CascadingSelectField? { fields.customfield_12448 } // Request Classification (cascading)
@@ -76,7 +77,8 @@ struct IssueFields: Codable, Hashable {
     let created: String?
     let updated: String?
     let components: [ComponentField]
-    let customfield_10014: String? // Epic Link
+    let parent: ParentField? // Parent issue (for hierarchy: Epic->Initiative, Story->Epic)
+    let customfield_10014: String? // Epic Link (legacy field for Stories)
     let customfield_10016: Double? // Story Points
     let customfield_10020: [SprintField]? // Sprint
     let customfield_11920: [CMDBObjectField]? // PCM Master (CMDB lookup)
@@ -99,6 +101,7 @@ struct IssueFields: Codable, Hashable {
             created: created,
             updated: updated,
             components: components,
+            parent: parent,
             customfield_10014: customfield_10014,
             customfield_10016: customfield_10016,
             customfield_10020: sprint,
@@ -124,6 +127,7 @@ struct IssueFields: Codable, Hashable {
             created: created,
             updated: updated,
             components: components,
+            parent: parent,
             customfield_10014: customfield_10014,
             customfield_10016: customfield_10016,
             customfield_10020: customfield_10020,
@@ -147,6 +151,7 @@ struct IssueFields: Codable, Hashable {
         created: String?,
         updated: String?,
         components: [ComponentField],
+        parent: ParentField? = nil,
         customfield_10014: String?,
         customfield_10016: Double?,
         customfield_10020: [SprintField]?,
@@ -167,6 +172,7 @@ struct IssueFields: Codable, Hashable {
         self.created = created
         self.updated = updated
         self.components = components
+        self.parent = parent
         self.customfield_10014 = customfield_10014
         self.customfield_10016 = customfield_10016
         self.customfield_10020 = customfield_10020
@@ -180,7 +186,7 @@ struct IssueFields: Codable, Hashable {
     // Coding keys to handle optional fields
     enum CodingKeys: String, CodingKey {
         case summary, status, resolution, assignee, reporter, issuetype, project, priority, created, updated
-        case components
+        case components, parent
         case customfield_10014, customfield_10016, customfield_10020, customfield_11920, customfield_12448
         case timeoriginalestimate, timespent, timeestimate
     }
@@ -199,6 +205,7 @@ struct IssueFields: Codable, Hashable {
         created = try container.decodeIfPresent(String.self, forKey: .created)
         updated = try container.decodeIfPresent(String.self, forKey: .updated)
         components = (try? container.decode([ComponentField].self, forKey: .components)) ?? []
+        parent = try container.decodeIfPresent(ParentField.self, forKey: .parent)
         customfield_10014 = try container.decodeIfPresent(String.self, forKey: .customfield_10014)
         customfield_10016 = try container.decodeIfPresent(Double.self, forKey: .customfield_10016)
         customfield_10020 = try container.decodeIfPresent([SprintField].self, forKey: .customfield_10020)
@@ -311,6 +318,18 @@ struct ResolutionField: Codable, Hashable {
 
 struct ComponentField: Codable, Hashable {
     let name: String
+}
+
+/// Parent issue field for hierarchy relationships (Epic->Initiative, Story->Epic)
+struct ParentField: Codable, Hashable {
+    let id: String
+    let key: String
+    let fields: ParentFieldDetails?
+}
+
+struct ParentFieldDetails: Codable, Hashable {
+    let summary: String
+    let issuetype: IssueTypeField?
 }
 
 /// Full component details from project components API

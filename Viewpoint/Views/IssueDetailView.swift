@@ -929,24 +929,50 @@ struct IssueSprintSelector: View {
     }
 }
 
-// MARK: - Issue Epic Selector
+// MARK: - Issue Parent Selector
 
 struct IssueEpicSelector: View {
     let issue: JiraIssue
     @EnvironmentObject var jiraService: JiraService
     @Environment(\.refreshIssueDetails) var refreshIssueDetails
     @State private var searchText: String = ""
-    @State private var availableEpics: [String: String] = [:] // epic key -> summary
+    @State private var availableParents: [String: String] = [:] // parent key -> summary
     @State private var isLoading = false
     @State private var showingPicker = false
 
-    private var currentEpicKey: String? {
-        issue.fields.customfield_10014
+    /// Determine what type of parent to search for based on issue type
+    private var parentType: String {
+        switch issue.issueType.lowercased() {
+        case "epic":
+            return "Initiative"
+        case "initiative":
+            return "" // Initiatives typically don't have parents
+        default:
+            return "Epic" // Stories, Tasks, Bugs, Sub-tasks -> Epic
+        }
     }
 
-    private var currentEpicDisplay: String {
-        if let epicKey = currentEpicKey {
-            if let summary = availableEpics[epicKey] {
+    /// Get current parent from either the parent field or epic link field
+    private var currentParentKey: String? {
+        // First check the parent field (used for Epic->Initiative hierarchy)
+        if let parent = issue.fields.parent {
+            return parent.key
+        }
+        // Fall back to epic link field (used for Story->Epic)
+        return issue.fields.customfield_10014
+    }
+
+    private var currentParentDisplay: String {
+        // Check parent field first
+        if let parent = issue.fields.parent {
+            if let details = parent.fields {
+                return "\(parent.key): \(details.summary)"
+            }
+            return parent.key
+        }
+        // Fall back to epic link
+        if let epicKey = issue.fields.customfield_10014 {
+            if let summary = availableParents[epicKey] {
                 return "\(epicKey): \(summary)"
             }
             return epicKey
@@ -954,12 +980,12 @@ struct IssueEpicSelector: View {
         return "None"
     }
 
-    private var filteredEpics: [(key: String, summary: String)] {
-        let epics = availableEpics.map { (key: $0.key, summary: $0.value) }
+    private var filteredParents: [(key: String, summary: String)] {
+        let parents = availableParents.map { (key: $0.key, summary: $0.value) }
         if searchText.isEmpty {
-            return epics.sorted { $0.key > $1.key }
+            return parents.sorted { $0.key > $1.key }
         }
-        return epics.filter {
+        return parents.filter {
             $0.key.lowercased().contains(searchText.lowercased()) ||
             $0.summary.lowercased().contains(searchText.lowercased())
         }.sorted { $0.key > $1.key }
@@ -971,104 +997,115 @@ struct IssueEpicSelector: View {
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundColor(.primary)
 
-            Button(action: {
-                showingPicker.toggle()
-            }) {
-                HStack {
-                    Text(currentEpicDisplay)
-                        .font(.system(size: 12))
-                        .foregroundColor(currentEpicKey == nil ? .secondary : .purple)
-                        .lineLimit(2)
-                    Spacer()
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 8))
-                        .foregroundColor(.secondary)
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(Color(NSColor.controlBackgroundColor))
-                .cornerRadius(6)
-            }
-            .buttonStyle(.plain)
-            .popover(isPresented: $showingPicker, arrowEdge: .trailing) {
-                VStack(spacing: 0) {
-                    // Search field
-                    HStack(spacing: 6) {
-                        Image(systemName: "magnifyingglass")
-                            .foregroundColor(.secondary)
-                            .font(.system(size: 11))
-                        TextField("Search epics...", text: $searchText)
-                            .textFieldStyle(.plain)
-                            .font(.system(size: 12))
-                        if !searchText.isEmpty {
-                            Button(action: { searchText = "" }) {
-                                Image(systemName: "xmark.circle.fill")
-                                    .foregroundColor(.secondary)
-                                    .font(.system(size: 12))
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                    .padding(8)
+            // Don't show picker for Initiatives (no parent type)
+            if parentType.isEmpty {
+                Text("N/A")
+                    .font(.system(size: 12))
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .background(Color(NSColor.controlBackgroundColor))
-
-                    Divider()
-
-                    // Epic list
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 0) {
-                            // None option
-                            Button(action: {
-                                updateEpic(to: nil)
-                                showingPicker = false
-                            }) {
-                                Text("None")
-                                    .font(.system(size: 12))
-                                    .foregroundColor(.primary)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 6)
-                            }
-                            .buttonStyle(.plain)
-                            .background(currentEpicKey == nil ? Color.accentColor.opacity(0.1) : Color.clear)
-
-                            Divider()
-
-                            if isLoading {
-                                HStack {
-                                    ProgressView()
-                                        .scaleEffect(0.7)
-                                    Text("Loading epics...")
-                                        .font(.system(size: 12))
+                    .cornerRadius(6)
+            } else {
+                Button(action: {
+                    showingPicker.toggle()
+                }) {
+                    HStack {
+                        Text(currentParentDisplay)
+                            .font(.system(size: 12))
+                            .foregroundColor(currentParentKey == nil ? .secondary : .purple)
+                            .lineLimit(2)
+                        Spacer()
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 8))
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Color(NSColor.controlBackgroundColor))
+                    .cornerRadius(6)
+                }
+                .buttonStyle(.plain)
+                .popover(isPresented: $showingPicker, arrowEdge: .trailing) {
+                    VStack(spacing: 0) {
+                        // Search field
+                        HStack(spacing: 6) {
+                            Image(systemName: "magnifyingglass")
+                                .foregroundColor(.secondary)
+                                .font(.system(size: 11))
+                            TextField("Search \(parentType.lowercased())s...", text: $searchText)
+                                .textFieldStyle(.plain)
+                                .font(.system(size: 12))
+                            if !searchText.isEmpty {
+                                Button(action: { searchText = "" }) {
+                                    Image(systemName: "xmark.circle.fill")
                                         .foregroundColor(.secondary)
+                                        .font(.system(size: 12))
                                 }
-                                .padding()
-                            } else if filteredEpics.isEmpty {
-                                Text(searchText.isEmpty ? "No epics available" : "No epics found")
-                                    .font(.system(size: 12))
-                                    .foregroundColor(.secondary)
-                                    .padding()
-                            } else {
-                                ForEach(filteredEpics, id: \.key) { epic in
-                                    Button(action: {
-                                        updateEpic(to: epic.key)
-                                        showingPicker = false
-                                        searchText = ""
-                                    }) {
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            Text(epic.key)
-                                                .font(.system(size: 10, design: .monospaced))
-                                                .foregroundColor(.secondary)
-                                            Text(epic.summary)
-                                                .font(.system(size: 12))
-                                                .foregroundColor(.primary)
-                                        }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .padding(8)
+                        .background(Color(NSColor.controlBackgroundColor))
+
+                        Divider()
+
+                        // Parent list
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 0) {
+                                // None option
+                                Button(action: {
+                                    updateParent(to: nil)
+                                    showingPicker = false
+                                }) {
+                                    Text("None")
+                                        .font(.system(size: 12))
+                                        .foregroundColor(.primary)
                                         .frame(maxWidth: .infinity, alignment: .leading)
                                         .padding(.horizontal, 12)
                                         .padding(.vertical, 6)
+                                }
+                                .buttonStyle(.plain)
+                                .background(currentParentKey == nil ? Color.accentColor.opacity(0.1) : Color.clear)
+
+                                Divider()
+
+                                if isLoading {
+                                    HStack {
+                                        ProgressView()
+                                            .scaleEffect(0.7)
+                                        Text("Loading \(parentType.lowercased())s...")
+                                            .font(.system(size: 12))
+                                            .foregroundColor(.secondary)
+                                    }
+                                    .padding()
+                                } else if filteredParents.isEmpty {
+                                    Text(searchText.isEmpty ? "No \(parentType.lowercased())s available" : "No \(parentType.lowercased())s found")
+                                        .font(.system(size: 12))
+                                        .foregroundColor(.secondary)
+                                        .padding()
+                                } else {
+                                    ForEach(filteredParents, id: \.key) { parent in
+                                        Button(action: {
+                                            updateParent(to: parent.key)
+                                            showingPicker = false
+                                            searchText = ""
+                                        }) {
+                                            VStack(alignment: .leading, spacing: 2) {
+                                                Text(parent.key)
+                                                    .font(.system(size: 10, design: .monospaced))
+                                                    .foregroundColor(.secondary)
+                                                Text(parent.summary)
+                                                    .font(.system(size: 12))
+                                                    .foregroundColor(.primary)
+                                            }
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                            .padding(.horizontal, 12)
+                                        .padding(.vertical, 6)
                                     }
                                     .buttonStyle(.plain)
-                                    .background(currentEpicKey == epic.key ? Color.accentColor.opacity(0.1) : Color.clear)
+                                    .background(currentParentKey == parent.key ? Color.accentColor.opacity(0.1) : Color.clear)
 
                                     Divider()
                                 }
@@ -1080,16 +1117,19 @@ struct IssueEpicSelector: View {
             }
         }
         .task {
-            await loadEpics()
+            await loadParents()
         }
     }
 
-    private func loadEpics() async {
+    private func loadParents() async {
+        // Don't load if no parent type (Initiatives)
+        guard !parentType.isEmpty else { return }
+
         isLoading = true
         let projectName = issue.project
 
-        // Build JQL to find all epics in this project
-        let jql = "project = \"\(projectName)\" AND type = Epic AND resolution = Unresolved ORDER BY created DESC"
+        // Build JQL to find potential parents based on issue type
+        let jql = "project = \"\(projectName)\" AND type = \(parentType) AND resolution = Unresolved ORDER BY created DESC"
 
         var components = URLComponents(string: "\(jiraService.config.jiraBaseURL)/rest/api/3/search/jql")!
         components.queryItems = [
@@ -1114,46 +1154,55 @@ struct IssueEpicSelector: View {
             let (data, response) = try await URLSession.shared.data(for: request)
 
             guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
-                Logger.shared.error("Failed to fetch epics")
+                Logger.shared.error("Failed to fetch \(parentType.lowercased())s")
                 isLoading = false
                 return
             }
 
             if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                let issues = json["issues"] as? [[String: Any]] {
-                var epics: [String: String] = [:]
+                var parents: [String: String] = [:]
                 for issue in issues {
                     if let key = issue["key"] as? String,
                        let fields = issue["fields"] as? [String: Any],
                        let summary = fields["summary"] as? String {
-                        epics[key] = summary
+                        parents[key] = summary
                     }
                 }
                 await MainActor.run {
-                    self.availableEpics = epics
+                    self.availableParents = parents
                 }
             }
         } catch {
-            Logger.shared.error("Error fetching epics: \(error)")
+            Logger.shared.error("Error fetching \(parentType.lowercased())s: \(error)")
         }
 
         isLoading = false
     }
 
-    private func updateEpic(to epicKey: String?) {
+    private func updateParent(to parentKey: String?) {
         Task {
+            let fields: [String: Any]
+            if let parentKey = parentKey {
+                // Set new parent using the parent field
+                fields = ["parent": ["key": parentKey]]
+            } else {
+                // Clear parent
+                fields = ["parent": NSNull()]
+            }
+
             let success = await jiraService.updateIssue(
                 issueKey: issue.key,
-                fields: epicKey == nil ? ["customfield_10014": NSNull()] : ["epic": epicKey!]
+                fields: fields
             )
 
             if success {
-                Logger.shared.info("Updated epic for \(issue.key) to \(epicKey ?? "None")")
+                Logger.shared.info("Updated parent for \(issue.key) to \(parentKey ?? "None")")
                 await MainActor.run {
                     refreshIssueDetails()
                 }
             } else {
-                Logger.shared.error("Failed to update epic for \(issue.key)")
+                Logger.shared.error("Failed to update parent for \(issue.key)")
             }
         }
     }

@@ -219,7 +219,7 @@ class JiraService: ObservableObject {
                 var queryItems = [
                     URLQueryItem(name: "jql", value: jql),
                     URLQueryItem(name: "maxResults", value: String(maxResults)),
-                    URLQueryItem(name: "fields", value: "summary,status,resolution,assignee,reporter,issuetype,project,priority,created,updated,components,customfield_10014,customfield_10016,customfield_10020,customfield_11920,customfield_12448,timeoriginalestimate,timespent,timeestimate")
+                    URLQueryItem(name: "fields", value: "summary,status,resolution,assignee,reporter,issuetype,project,priority,created,updated,components,parent,customfield_10014,customfield_10016,customfield_10020,customfield_11920,customfield_12448,timeoriginalestimate,timespent,timeestimate")
                 ]
 
                 // Add nextPageToken if we have one (not on first page)
@@ -332,7 +332,7 @@ class JiraService: ObservableObject {
             components.queryItems = [
                 URLQueryItem(name: "jql", value: jql),
                 URLQueryItem(name: "maxResults", value: String(maxResults)),
-                URLQueryItem(name: "fields", value: "summary,status,resolution,assignee,reporter,issuetype,project,priority,created,updated,components,customfield_10014,customfield_10016,customfield_10020,customfield_11920,customfield_12448,timeoriginalestimate,timespent,timeestimate")
+                URLQueryItem(name: "fields", value: "summary,status,resolution,assignee,reporter,issuetype,project,priority,created,updated,components,parent,customfield_10014,customfield_10016,customfield_10020,customfield_11920,customfield_12448,timeoriginalestimate,timespent,timeestimate")
             ]
 
             guard let url = components.url else {
@@ -700,7 +700,7 @@ class JiraService: ObservableObject {
         components.queryItems = [
             URLQueryItem(name: "jql", value: jql),
             URLQueryItem(name: "maxResults", value: "100"),
-            URLQueryItem(name: "fields", value: "summary,status,resolution,assignee,reporter,issuetype,project,priority,created,updated,components,customfield_10014,customfield_10016,customfield_10020,customfield_11920,customfield_12448,timeoriginalestimate,timespent,timeestimate")
+            URLQueryItem(name: "fields", value: "summary,status,resolution,assignee,reporter,issuetype,project,priority,created,updated,components,parent,customfield_10014,customfield_10016,customfield_10020,customfield_11920,customfield_12448,timeoriginalestimate,timespent,timeestimate")
         ]
 
         guard let url = components.url else {
@@ -2137,7 +2137,7 @@ class JiraService: ObservableObject {
         // Use expand parameter to get CMDB object attributes
         var components = URLComponents(string: "\(config.jiraBaseURL)/rest/api/3/issue/\(issueKey)")!
         components.queryItems = [
-            URLQueryItem(name: "fields", value: "summary,status,resolution,assignee,reporter,issuetype,project,priority,created,updated,components,description,customfield_10014,customfield_10016,customfield_10020,customfield_11920,customfield_12448,timeoriginalestimate,timespent,timeestimate"),
+            URLQueryItem(name: "fields", value: "summary,status,resolution,assignee,reporter,issuetype,project,priority,created,updated,components,parent,description,customfield_10014,customfield_10016,customfield_10020,customfield_11920,customfield_12448,timeoriginalestimate,timespent,timeestimate"),
             URLQueryItem(name: "expand", value: "names,renderedFields")
         ]
 
@@ -2226,7 +2226,7 @@ class JiraService: ObservableObject {
         components.queryItems = [
             URLQueryItem(name: "jql", value: jql),
             URLQueryItem(name: "maxResults", value: "50"),
-            URLQueryItem(name: "fields", value: "summary,status,resolution,assignee,reporter,issuetype,project,priority,created,updated,components,customfield_10014,customfield_10016,customfield_10020,customfield_11920,customfield_12448,timeoriginalestimate,timespent,timeestimate")
+            URLQueryItem(name: "fields", value: "summary,status,resolution,assignee,reporter,issuetype,project,priority,created,updated,components,parent,customfield_10014,customfield_10016,customfield_10020,customfield_11920,customfield_12448,timeoriginalestimate,timespent,timeestimate")
         ]
 
         guard let url = components.url else {

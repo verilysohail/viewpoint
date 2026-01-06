@@ -260,7 +260,7 @@ struct IndigoView: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(viewModel.inputText.isEmpty || viewModel.isProcessing)
-                .help("Send message (⏎)")
+                .help("Send message (⌘⏎)")
             }
             .padding()
         }
