@@ -223,13 +223,21 @@ class IndigoViewModel: ObservableObject {
             taskComplete = continuationResponse.taskComplete
             currentActions = continuationResponse.actions
 
+            // ALWAYS show what the AI says - this enables conversational back-and-forth
+            // like Claude Code, where the AI explains its reasoning, summarizes results,
+            // and can discuss errors or limitations
+            if !continuationResponse.text.isEmpty {
+                await MainActor.run {
+                    addMessage(Message(
+                        text: continuationResponse.text,
+                        sender: .ai,
+                        status: taskComplete ? .success : nil
+                    ))
+                }
+                Logger.shared.info("AI response: \(continuationResponse.text.prefix(100))...")
+            }
+
             if taskComplete {
-                // Show AI's completion message
-                addMessage(Message(
-                    text: continuationResponse.text,
-                    sender: .ai,
-                    status: .success
-                ))
                 Logger.shared.info("AI confirmed task complete")
             }
         }
