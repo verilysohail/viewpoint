@@ -78,6 +78,9 @@ struct IssueDetailView: View {
     @State private var isSubmittingComment = false
     @State private var childIssues: [JiraIssue] = []
     @State private var isLoadingChildren = false
+    @State private var showingTransitionFields = false
+    @State private var pendingTransitionInfo: TransitionInfo?
+    @State private var pendingTargetStatus: String = ""
 
     var body: some View {
         VStack(spacing: 0) {
@@ -119,6 +122,69 @@ struct IssueDetailView: View {
         .task {
             await loadChildIssues()
         }
+        .sheet(isPresented: $showingTransitionFields) {
+            if let transitionInfo = pendingTransitionInfo {
+                TransitionFieldsView(
+                    issue: issueDetails.issue,
+                    targetStatus: pendingTargetStatus,
+                    transitionInfo: transitionInfo,
+                    isPresented: $showingTransitionFields
+                )
+                .environmentObject(jiraService)
+            }
+        }
+        .onChange(of: showingTransitionFields) { isShowing in
+            // When the transition sheet closes, refresh the details
+            if !isShowing {
+                refreshIssueDetails()
+            }
+        }
+    }
+
+    private var statusDropdown: some View {
+        Menu {
+            ForEach(jiraService.availableStatuses.sorted(), id: \.self) { status in
+                Button(action: {
+                    Task {
+                        await handleStatusChange(to: status)
+                    }
+                }) {
+                    HStack {
+                        Text(status)
+                        if issueDetails.issue.status == status {
+                            Image(systemName: "checkmark")
+                        }
+                    }
+                }
+            }
+        } label: {
+            Text(issueDetails.issue.status)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(statusColor(for: issueDetails.issue.status))
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+    }
+
+    private func handleStatusChange(to newStatus: String) async {
+        // Check if this transition requires additional fields
+        if let transitionInfo = await jiraService.getTransitionInfo(issueKey: issueDetails.issue.key, targetStatus: newStatus) {
+            if transitionInfo.requiredFields.isEmpty {
+                // No required fields, transition directly
+                let _ = await jiraService.updateIssueStatus(issueKey: issueDetails.issue.key, newStatus: newStatus)
+                // Refresh the detail view to show updated status
+                await MainActor.run {
+                    refreshIssueDetails()
+                }
+            } else {
+                // Has required fields, show the dialog
+                await MainActor.run {
+                    pendingTransitionInfo = transitionInfo
+                    pendingTargetStatus = newStatus
+                    showingTransitionFields = true
+                }
+            }
+        }
     }
 
     private var headerView: some View {
@@ -156,7 +222,12 @@ struct IssueDetailView: View {
 
             // Metadata row
             HStack(spacing: 20) {
-                metadataItem(label: "Status", value: issueDetails.issue.status, color: statusColor(for: issueDetails.issue.status))
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Status")
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
+                    statusDropdown
+                }
                 if let resolution = issueDetails.issue.resolution {
                     metadataItem(label: "Resolution", value: resolution, color: .green)
                 }
