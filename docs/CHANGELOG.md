@@ -2,6 +2,23 @@
 
 All notable changes to Viewpoint will be documented in this file.
 
+## [2.3.1] - 2026-01-29
+
+### Added
+
+**✨ Status Changing in Detail Window**
+- Status can now be changed directly from the Detail window
+- Interactive dropdown menu in the header shows all available statuses
+- Supports both simple transitions and those requiring additional fields (resolution, etc.)
+- Consistent transition handling with the List view status dropdown
+- Detail window automatically refreshes after status change
+
+**📋 Task Tracking**
+- Added docs/TASKS.md for tracking future feature enhancements
+- Documented two pending features: showing only valid transitions in status dropdown, creating child items from detail window
+
+---
+
 ## [2.2.5] - 2025-12-22
 
 ### Added
