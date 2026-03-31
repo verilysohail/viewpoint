@@ -8,19 +8,23 @@ struct Message: Identifiable, Equatable {
     let sender: Sender
     let timestamp: Date
     let status: MessageStatus?
+    let toolExecution: ToolExecutionInfo?
 
-    init(id: UUID = UUID(), text: String, sender: Sender, timestamp: Date = Date(), status: MessageStatus? = nil) {
+    init(id: UUID = UUID(), text: String, sender: Sender, timestamp: Date = Date(),
+         status: MessageStatus? = nil, toolExecution: ToolExecutionInfo? = nil) {
         self.id = id
         self.text = text
         self.sender = sender
         self.timestamp = timestamp
         self.status = status
+        self.toolExecution = toolExecution
     }
 
     enum Sender: Equatable {
         case user
         case ai
         case system
+        case tool
     }
 
     enum MessageStatus: Equatable {
@@ -31,18 +35,33 @@ struct Message: Identifiable, Equatable {
     }
 }
 
+// MARK: - Tool Execution Info
+
+struct ToolExecutionInfo: Equatable {
+    let toolName: String
+    let arguments: [String: String]
+    let resultStatus: Status
+    let resultMessage: String?
+
+    enum Status: Equatable {
+        case executing
+        case success
+        case failure
+    }
+}
+
 // MARK: - AI Models
 
 enum AIModel: String, CaseIterable, Identifiable {
-    case gemini3ProPreview = "gemini-3-pro-preview"
+    case gemini31ProPreview = "gemini-3.1-pro-preview"
     case gemini25Pro = "gemini-2.5-pro"
 
     var id: String { rawValue }
 
     var displayName: String {
         switch self {
-        case .gemini3ProPreview:
-            return "Gemini 3 Pro Preview (Best Quality)"
+        case .gemini31ProPreview:
+            return "Gemini 3.1 Pro Preview (Best Quality)"
         case .gemini25Pro:
             return "Gemini 2.5 Pro (Fast & Efficient)"
         }
@@ -51,21 +70,21 @@ enum AIModel: String, CaseIterable, Identifiable {
     // Some models are only available in the global region
     var usesGlobalRegion: Bool {
         switch self {
-        case .gemini3ProPreview: return true
+        case .gemini31ProPreview: return true
         case .gemini25Pro: return false
         }
     }
 
     var inputCostPer1M: Double {
         switch self {
-        case .gemini3ProPreview: return 1.25
+        case .gemini31ProPreview: return 1.25
         case .gemini25Pro: return 1.25
         }
     }
 
     var outputCostPer1M: Double {
         switch self {
-        case .gemini3ProPreview: return 5.00
+        case .gemini31ProPreview: return 5.00
         case .gemini25Pro: return 5.00
         }
     }
@@ -87,9 +106,16 @@ struct AIContext {
     let lastSearchResults: [JiraIssue]?
     let lastCreatedIssue: String?
 
-    // NEW: Action results for ReAct pattern feedback loop
+    // Action results for ReAct pattern feedback loop
     let actionHistory: [(action: AIAction, result: ToolResult)]?
     let userGoal: String?  // Original user request for context across iterations
+
+    // Generated prompt sections (computed on MainActor, used in buildSystemPrompt)
+    let toolsPrompt: String
+    let actionFormatPrompt: String
+
+    // Enabled workflow patterns for prompt injection
+    let enabledPatterns: [WorkflowPattern]
 }
 
 // MARK: - AI Action (New JSON-based action system)

@@ -4,15 +4,17 @@ import SwiftUI
 class AIService {
     private var client: VertexAIClient?
     private let jiraService: JiraService
+    private let patternsManager: WorkflowPatternsManager
 
-    init(jiraService: JiraService) {
+    init(jiraService: JiraService, patternsManager: WorkflowPatternsManager) {
         self.jiraService = jiraService
+        self.patternsManager = patternsManager
         configureClient()
     }
 
     private func configureClient() {
         // Load the selected model
-        let modelRaw = UserDefaults.standard.string(forKey: "selectedAIModel") ?? AIModel.gemini3ProPreview.rawValue
+        let modelRaw = UserDefaults.standard.string(forKey: "selectedAIModel") ?? AIModel.gemini31ProPreview.rawValue
 
         guard let model = AIModel.allCases.first(where: { $0.rawValue == modelRaw }) else {
             Logger.shared.warning("Invalid model selection. Please configure in Settings → AI.")
@@ -213,6 +215,13 @@ class AIService {
         let statuses = await MainActor.run { Array(jiraService.availableStatuses) }
         let resolutions = await MainActor.run { Array(jiraService.availableResolutions) }
 
+        // Compute tool prompts on MainActor (CapabilityRegistry is MainActor-isolated)
+        let toolsPrompt = await MainActor.run { CapabilityRegistry.shared.generateToolsPrompt() }
+        let actionFormatPrompt = await MainActor.run { CapabilityRegistry.shared.generateActionFormatPrompt() }
+
+        // Get enabled workflow patterns
+        let enabledPatterns = await MainActor.run { patternsManager.enabledPatterns }
+
         return AIContext(
             currentUser: currentUser,
             selectedIssues: selectedIssues,
@@ -227,7 +236,10 @@ class AIService {
             lastSearchResults: nil,
             lastCreatedIssue: nil,
             actionHistory: actionHistory,
-            userGoal: userGoal
+            userGoal: userGoal,
+            toolsPrompt: toolsPrompt,
+            actionFormatPrompt: actionFormatPrompt,
+            enabledPatterns: enabledPatterns
         )
     }
 
@@ -313,14 +325,29 @@ class AIService {
             actionHistorySection = ""
         }
 
-        // Get tools from CapabilityRegistry
-        let toolsPrompt = CapabilityRegistry.shared.generateToolsPrompt()
-        let actionFormat = CapabilityRegistry.shared.generateActionFormatPrompt()
+        // Use pre-computed tool prompts from context
+        let toolsPrompt = context.toolsPrompt
+        let actionFormat = context.actionFormatPrompt
+
+        // Load externalized prompt content
+        let prompt = PromptLoader.shared.content
+
+        // Build workflow patterns section
+        let patternsSection: String
+        if !context.enabledPatterns.isEmpty {
+            var text = "\n## Workflow Patterns\n\n"
+            for pattern in context.enabledPatterns {
+                text += "### \(pattern.name)\n"
+                text += "When: \(pattern.trigger)\n"
+                text += "Instructions:\n\(pattern.knowledge)\n\n"
+            }
+            patternsSection = text
+        } else {
+            patternsSection = ""
+        }
 
         return """
-        You are Indigo, an AI assistant for Jira integrated into Viewpoint, a macOS Jira client.
-
-        Your role is to help users manage their Jira issues using natural language. You can search for issues, update fields, create new issues, log work, and more.
+        \(prompt.identity)
         \(selectedIssuesSection)\(actionHistorySection)
 
         ## Current Context
@@ -334,21 +361,16 @@ class AIService {
           \(context.availableSprints.filter { $0.state.lowercased() != "closed" }.prefix(10).map { "\($0.name) (ID: \($0.id), state: \($0.state))" }.joined(separator: "\n          "))
 
         ## Answering Questions
-        When the user asks questions about selected issues (e.g., "what is this about?", "summarize this"), use the SELECTED ISSUE DETAILS above to answer directly. Be conversational and helpful.
+        \(prompt.answeringQuestions)
 
         \(actionFormat)
 
         \(toolsPrompt)
-
+        \(patternsSection)
         ## Important Guidelines
-        - Always explain what you're doing in plain language alongside the action
-        - When closing/resolving issues, include both status and resolution fields
-        - For time logging, convert durations to seconds (1h = 3600, 2h = 7200, etc.)
-        - For estimates, pass time strings like "2h" or "30m" directly
-        - Use "currentUser()" in JQL for the current user's issues
-        - Be concise and helpful
+        \(prompt.guidelines)
 
-        Respond naturally and help the user accomplish their Jira tasks efficiently.
+        \(prompt.closing)
         """
     }
 

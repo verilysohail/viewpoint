@@ -400,6 +400,14 @@ struct MessageBubbleView: View {
     @State private var isHovering = false
 
     var body: some View {
+        if message.sender == .tool, let toolExec = message.toolExecution {
+            ToolExecutionBubble(info: toolExec, timestamp: message.timestamp)
+        } else {
+            standardBubble
+        }
+    }
+
+    private var standardBubble: some View {
         HStack(alignment: .top, spacing: 12) {
             if message.sender == .user {
                 Spacer()
@@ -461,6 +469,7 @@ struct MessageBubbleView: View {
         case .user: return "You"
         case .ai: return "Indigo"
         case .system: return "System"
+        case .tool: return "Tool"
         }
     }
 
@@ -469,6 +478,7 @@ struct MessageBubbleView: View {
         case .user: return "person.circle.fill"
         case .ai: return "sparkles"
         case .system: return "info.circle.fill"
+        case .tool: return "terminal.fill"
         }
     }
 
@@ -477,6 +487,7 @@ struct MessageBubbleView: View {
         case .user: return Color(red: 0.31, green: 0.27, blue: 0.90)
         case .ai: return Color(red: 0.46, green: 0.39, blue: 1.0)
         case .system: return .secondary
+        case .tool: return Color(red: 0.46, green: 0.39, blue: 1.0)
         }
     }
 
@@ -494,7 +505,7 @@ struct MessageBubbleView: View {
                 startPoint: .top,
                 endPoint: .bottom
             )
-        case .system:
+        case .system, .tool:
             return LinearGradient(
                 colors: [Color.secondary.opacity(0.1)],
                 startPoint: .top,
@@ -507,7 +518,7 @@ struct MessageBubbleView: View {
         switch message.sender {
         case .user: return .clear
         case .ai: return Color.secondary.opacity(0.2)
-        case .system: return Color.secondary.opacity(0.2)
+        case .system, .tool: return Color.secondary.opacity(0.2)
         }
     }
 
@@ -548,5 +559,121 @@ struct MessageBubbleView: View {
         case .error: return "Error"
         case .processing: return "Processing..."
         }
+    }
+}
+
+// MARK: - Tool Execution Bubble
+
+struct ToolExecutionBubble: View {
+    let info: ToolExecutionInfo
+    let timestamp: Date
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 6) {
+                // Header
+                HStack(spacing: 6) {
+                    Image(systemName: "terminal.fill")
+                        .font(.system(size: 11))
+                        .foregroundColor(Color(red: 0.46, green: 0.39, blue: 1.0))
+                    Text("Tool")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.secondary)
+                    Text(timeString)
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
+                }
+
+                // Tool execution content
+                VStack(alignment: .leading, spacing: 6) {
+                    // Tool name with status icon
+                    HStack(spacing: 6) {
+                        statusIcon
+                        Text(info.toolName)
+                            .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                    }
+
+                    // Arguments
+                    if !info.arguments.isEmpty {
+                        VStack(alignment: .leading, spacing: 2) {
+                            ForEach(Array(info.arguments.sorted(by: { $0.key < $1.key })), id: \.key) { key, value in
+                                HStack(alignment: .top, spacing: 4) {
+                                    Text(key)
+                                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                                        .foregroundColor(.secondary)
+                                    Text("=")
+                                        .font(.system(size: 11, design: .monospaced))
+                                        .foregroundColor(.secondary)
+                                    Text(truncateValue(value))
+                                        .font(.system(size: 11, design: .monospaced))
+                                        .foregroundColor(.primary)
+                                        .lineLimit(2)
+                                }
+                            }
+                        }
+                    }
+
+                    // Result message
+                    if let resultMessage = info.resultMessage {
+                        Text(resultMessage)
+                            .font(.system(size: 12))
+                            .foregroundColor(info.resultStatus == .failure ? .red : .secondary)
+                    }
+                }
+                .padding(10)
+                .background(toolBackground)
+                .cornerRadius(8)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(toolBorderColor, lineWidth: 1)
+                )
+            }
+            .frame(maxWidth: 400, alignment: .leading)
+
+            Spacer()
+        }
+    }
+
+    private var statusIcon: some View {
+        Group {
+            switch info.resultStatus {
+            case .executing:
+                ProgressView()
+                    .controlSize(.small)
+            case .success:
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundColor(.green)
+                    .font(.system(size: 13))
+            case .failure:
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundColor(.red)
+                    .font(.system(size: 13))
+            }
+        }
+    }
+
+    private var toolBackground: some ShapeStyle {
+        LinearGradient(
+            colors: [Color(red: 0.31, green: 0.27, blue: 0.90).opacity(0.06)],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+    }
+
+    private var toolBorderColor: Color {
+        Color(red: 0.46, green: 0.39, blue: 1.0).opacity(0.2)
+    }
+
+    private var timeString: String {
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        return formatter.string(from: timestamp)
+    }
+
+    private func truncateValue(_ value: String) -> String {
+        if value.count > 80 {
+            return String(value.prefix(77)) + "..."
+        }
+        return value
     }
 }

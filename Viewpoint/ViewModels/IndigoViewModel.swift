@@ -30,23 +30,25 @@ class IndigoViewModel: ObservableObject {
     private var pendingPCMIssueKey: String?
 
     private let jiraService: JiraService
+    private let patternsManager: WorkflowPatternsManager
     private var cancellables = Set<AnyCancellable>()
     private var audioRecorder: AudioRecorder?
     private var whisperService: WhisperService?
     private var aiService: AIService?
     private var isWhisperLoaded = false
 
-    init(jiraService: JiraService) {
+    init(jiraService: JiraService, patternsManager: WorkflowPatternsManager) {
         self.jiraService = jiraService
+        self.patternsManager = patternsManager
 
         // Load selected model from UserDefaults
-        let modelRaw = UserDefaults.standard.string(forKey: "selectedAIModel") ?? AIModel.gemini3ProPreview.rawValue
-        self.selectedModel = AIModel(rawValue: modelRaw) ?? .gemini3ProPreview
+        let modelRaw = UserDefaults.standard.string(forKey: "selectedAIModel") ?? AIModel.gemini31ProPreview.rawValue
+        self.selectedModel = AIModel(rawValue: modelRaw) ?? .gemini31ProPreview
 
         // Initialize services
         self.whisperService = WhisperService()
         self.audioRecorder = AudioRecorder()
-        self.aiService = AIService(jiraService: jiraService)
+        self.aiService = AIService(jiraService: jiraService, patternsManager: patternsManager)
 
         // Add welcome message
         addMessage(Message(
@@ -65,7 +67,7 @@ class IndigoViewModel: ObservableObject {
         UserDefaults.standard.set(newModel.rawValue, forKey: "selectedAIModel")
 
         // Reconfigure AI service
-        aiService = AIService(jiraService: jiraService)
+        aiService = AIService(jiraService: jiraService, patternsManager: patternsManager)
 
         addMessage(Message(
             text: "✓ Switched to \(newModel.displayName)",
@@ -407,11 +409,21 @@ class IndigoViewModel: ObservableObject {
     private func executeActionAndGetResult(_ action: AIAction) async -> ToolResult {
         Logger.shared.info("Executing action: \(action.tool) with args: \(action.arguments)")
 
-        // Show executing message
+        let argsDisplay = action.arguments.mapValues { "\($0)" }
+
+        // Show executing message with tool bubble
+        let executingMessageId = UUID()
         addMessage(Message(
-            text: "⚡ Executing: \(action.tool)",
-            sender: .system,
-            status: .processing
+            id: executingMessageId,
+            text: "",
+            sender: .tool,
+            status: .processing,
+            toolExecution: ToolExecutionInfo(
+                toolName: action.tool,
+                arguments: argsDisplay,
+                resultStatus: .executing,
+                resultMessage: nil
+            )
         ))
 
         do {
@@ -420,57 +432,63 @@ class IndigoViewModel: ObservableObject {
                 arguments: action.arguments
             )
 
+            // Build result message
+            let resultMessage: String
             if result.success {
-                // Special handling for search results - update the main window
                 if action.tool == "search_issues" {
                     let issueCount = jiraService.issues.count
-                    if issueCount > 0 {
-                        addMessage(Message(
-                            text: "✓ Found \(issueCount) issue\(issueCount == 1 ? "" : "s"). Results displayed in main window.",
-                            sender: .system,
-                            status: .success
-                        ))
-                    } else {
-                        addMessage(Message(
-                            text: "No issues found matching this search.",
-                            sender: .system,
-                            status: .warning
-                        ))
-                    }
-                } else if let message = result.message {
-                    addMessage(Message(
-                        text: "✓ \(message)",
-                        sender: .system,
-                        status: .success
-                    ))
+                    resultMessage = issueCount > 0
+                        ? "Found \(issueCount) issue\(issueCount == 1 ? "" : "s")"
+                        : "No issues found"
                 } else {
-                    addMessage(Message(
-                        text: "✓ \(action.tool) completed successfully",
-                        sender: .system,
-                        status: .success
-                    ))
-                }
-
-                // If data was returned, we could display it here
-                if let data = result.data {
-                    Logger.shared.debug("Action \(action.tool) returned data: \(data)")
+                    resultMessage = result.message ?? "\(action.tool) completed"
                 }
             } else {
-                addMessage(Message(
-                    text: "✗ \(result.message ?? "Action failed")",
-                    sender: .system,
-                    status: .error
-                ))
+                resultMessage = result.message ?? "Action failed"
+            }
+
+            // Update the executing message with the result
+            if let index = messages.firstIndex(where: { $0.id == executingMessageId }) {
+                messages[index] = Message(
+                    id: executingMessageId,
+                    text: "",
+                    sender: .tool,
+                    timestamp: messages[index].timestamp,
+                    status: result.success ? .success : .error,
+                    toolExecution: ToolExecutionInfo(
+                        toolName: action.tool,
+                        arguments: argsDisplay,
+                        resultStatus: result.success ? .success : .failure,
+                        resultMessage: resultMessage
+                    )
+                )
+            }
+
+            if let data = result.data {
+                Logger.shared.debug("Action \(action.tool) returned data: \(data)")
             }
 
             return result
         } catch {
             Logger.shared.error("Action execution error: \(error)")
-            addMessage(Message(
-                text: "✗ Error: \(error.localizedDescription)",
-                sender: .system,
-                status: .error
-            ))
+
+            // Update the executing message with the error
+            if let index = messages.firstIndex(where: { $0.id == executingMessageId }) {
+                messages[index] = Message(
+                    id: executingMessageId,
+                    text: "",
+                    sender: .tool,
+                    timestamp: messages[index].timestamp,
+                    status: .error,
+                    toolExecution: ToolExecutionInfo(
+                        toolName: action.tool,
+                        arguments: argsDisplay,
+                        resultStatus: .failure,
+                        resultMessage: error.localizedDescription
+                    )
+                )
+            }
+
             return ToolResult.failure(error.localizedDescription)
         }
     }

@@ -23,7 +23,8 @@ let package = Package(
             ],
             path: "Viewpoint",
             resources: [
-                .process("Assets.xcassets")
+                .process("Assets.xcassets"),
+                .process("Resources")
             ]
         )
     ]

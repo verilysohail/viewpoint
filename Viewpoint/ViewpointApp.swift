@@ -6,6 +6,7 @@ struct ViewpointApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var jiraService = JiraService()
     @StateObject private var viewsManager = ViewsManager()
+    @StateObject private var patternsManager = WorkflowPatternsManager()
     @AppStorage("hasCompletedSetup") private var hasCompletedSetup = false
     @AppStorage("showMenuBarIcon") private var showMenuBarIcon = true
 
@@ -19,6 +20,7 @@ struct ViewpointApp: App {
             ContentView()
                 .environmentObject(jiraService)
                 .environmentObject(viewsManager)
+                .environmentObject(patternsManager)
                 .frame(minWidth: 1000, minHeight: 600)
                 .onAppear {
                     checkFirstRun()
@@ -36,13 +38,25 @@ struct ViewpointApp: App {
 
         // Indigo AI Assistant Window
         Window("Indigo", id: "indigo") {
-            IndigoView(viewModel: IndigoViewModel(jiraService: jiraService))
+            IndigoView(viewModel: IndigoViewModel(jiraService: jiraService, patternsManager: patternsManager))
                 .environmentObject(jiraService)
+                .environmentObject(patternsManager)
                 .frame(minWidth: 500, minHeight: 700)
         }
         .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentSize)
         .defaultSize(width: 500, height: 700)
+        .defaultPosition(.center)
+
+        // Workflow Patterns & Tools Reference Window
+        Window("Workflow Patterns", id: "patterns") {
+            IndigoSettingsTab()
+                .environmentObject(patternsManager)
+                .frame(minWidth: 700, minHeight: 500)
+        }
+        .windowStyle(.titleBar)
+        .windowResizability(.contentSize)
+        .defaultSize(width: 800, height: 550)
         .defaultPosition(.center)
 
         // Issue Detail Windows (one per issue)
@@ -57,6 +71,7 @@ struct ViewpointApp: App {
 
         Settings {
             SettingsView()
+                .environmentObject(patternsManager)
                 .onDisappear {
                     // Mark setup as complete when settings are dismissed
                     if isConfigured() {

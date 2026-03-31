@@ -194,7 +194,7 @@ struct ConnectionSettingsTab: View {
 // MARK: - AI Settings Tab
 
 struct AISettingsTab: View {
-    @State private var selectedModel: AIModel = .gemini3ProPreview
+    @State private var selectedModel: AIModel = .gemini31ProPreview
     @State private var configurations: [AIModel: VertexConfig] = [:]
     @State private var showingSuccess = false
     @State private var errorMessage: String?

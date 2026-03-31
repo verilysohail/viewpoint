@@ -384,6 +384,16 @@ struct ContentView: View {
                 .help("Launch Indigo AI Assistant (⌘I)")
             }
 
+            ToolbarItem(id: "workflowPatterns", placement: .automatic, showsByDefault: true) {
+                Button(action: {
+                    openWindow(id: "patterns")
+                }) {
+                    Label("Workflow Patterns", systemImage: "list.bullet.rectangle")
+                }
+                .keyboardShortcut("p", modifiers: [.command, .shift])
+                .help("Workflow Patterns & Tools (⇧⌘P)")
+            }
+
             ToolbarItem(id: "controls", placement: .automatic, showsByDefault: true) {
                 HStack(spacing: 12) {
                     // Dark mode toggle
