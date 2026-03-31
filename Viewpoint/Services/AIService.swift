@@ -410,6 +410,7 @@ class AIService {
               \(detail.issue.key): \(detail.issue.summary)
               Type: \(detail.issue.issueType) | Status: \(detail.issue.status) | Priority: \(detail.issue.priority ?? "None")
               Assignee: \(detail.issue.assignee ?? "Unassigned") | Reporter: \(detail.issue.reporter ?? "Unknown") | PCM Master: \(pcmMasterValue)
+              Original Estimate: \(formatTimeField(detail.issue.fields.timeoriginalestimate)) | Time Spent: \(formatTimeField(detail.issue.fields.timespent)) | Time Remaining: \(formatTimeField(detail.issue.fields.timeestimate))
             """
 
             if let description = detail.description, !description.isEmpty {
@@ -431,6 +432,19 @@ class AIService {
         }
 
         return result
+    }
+
+    private func formatTimeField(_ seconds: Int?) -> String {
+        guard let seconds = seconds, seconds > 0 else { return "None" }
+        let hours = seconds / 3600
+        let minutes = (seconds % 3600) / 60
+        if hours > 0 && minutes > 0 {
+            return "\(hours)h \(minutes)m (\(seconds)s)"
+        } else if hours > 0 {
+            return "\(hours)h (\(seconds)s)"
+        } else {
+            return "\(minutes)m (\(seconds)s)"
+        }
     }
 
     // MARK: - Shared Field Validation
