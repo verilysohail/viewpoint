@@ -365,12 +365,12 @@ struct ContentView: View {
                 .disabled(primarySelectedIssue == nil)
             }
 
-            ToolbarItem(id: "launchIndigo", placement: .automatic, showsByDefault: true) {
-                // Launch Indigo AI Assistant
+            ToolbarItem(id: "launchIris", placement: .automatic, showsByDefault: true) {
+                // Launch Iris AI Assistant
                 Button(action: {
                     openWindow(id: "indigo")
                 }) {
-                    Label("Launch Indigo", systemImage: "waveform.circle.fill")
+                    Label("Launch Iris", systemImage: "waveform.circle.fill")
                         .symbolRenderingMode(.palette)
                         .foregroundStyle(
                             LinearGradient(
@@ -381,7 +381,7 @@ struct ContentView: View {
                         )
                 }
                 .keyboardShortcut("i", modifiers: .command)
-                .help("Launch Indigo AI Assistant (⌘I)")
+                .help("Launch Iris AI Assistant (⌘I)")
             }
 
             ToolbarItem(id: "workflowPatterns", placement: .automatic, showsByDefault: true) {
@@ -473,7 +473,7 @@ struct HeaderView: View {
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Viewpoint")
+                Text("Indigo")
                     .font(.title)
                     .fontWeight(.bold)
                 if !searchText.isEmpty && filteredCount != jiraService.issues.count {

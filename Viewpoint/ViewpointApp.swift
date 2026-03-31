@@ -36,8 +36,8 @@ struct ViewpointApp: App {
         .windowResizability(.contentSize)
         .defaultPosition(.center)
 
-        // Indigo AI Assistant Window
-        Window("Indigo", id: "indigo") {
+        // Iris AI Assistant Window
+        Window("Iris", id: "indigo") {
             IndigoView(viewModel: IndigoViewModel(jiraService: jiraService, patternsManager: patternsManager))
                 .environmentObject(jiraService)
                 .environmentObject(patternsManager)

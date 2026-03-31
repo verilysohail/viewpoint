@@ -67,7 +67,7 @@ struct IndigoView: View {
 
     private var headerView: some View {
         HStack {
-            // Indigo branding
+            // Iris branding
             HStack(spacing: 8) {
                 Image(systemName: "waveform.circle.fill")
                     .font(.system(size: 24))
@@ -80,7 +80,7 @@ struct IndigoView: View {
                     )
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Indigo")
+                    Text("Iris")
                         .font(.system(size: 20, weight: .bold))
                         .foregroundColor(.primary)
 
@@ -467,7 +467,7 @@ struct MessageBubbleView: View {
     private var senderName: String {
         switch message.sender {
         case .user: return "You"
-        case .ai: return "Indigo"
+        case .ai: return "Iris"
         case .system: return "System"
         case .tool: return "Tool"
         }

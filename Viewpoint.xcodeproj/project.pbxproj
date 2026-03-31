@@ -9,6 +9,10 @@
 /* Begin PBXBuildFile section */
 		4EFE67 /* ManageViewsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C76CE /* ManageViewsSheet.swift */; };
 		54A55E /* SaveViewDialog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 069156 /* SaveViewDialog.swift */; };
+		A650218C2F7B912100394A41 /* WorkflowPattern.swift in Sources */ = {isa = PBXBuildFile; fileRef = A650218B2F7B912100394A41 /* WorkflowPattern.swift */; };
+		A650218E2F7B913600394A41 /* PromptLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = A650218D2F7B913600394A41 /* PromptLoader.swift */; };
+		A65021902F7B914500394A41 /* IndigoSettingsTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = A650218F2F7B914500394A41 /* IndigoSettingsTab.swift */; };
+		A65021932F7B919100394A41 /* IndigoPrompt.json in Resources */ = {isa = PBXBuildFile; fileRef = A65021912F7B919100394A41 /* IndigoPrompt.json */; };
 		A693ABF02EE7AB4C00768F00 /* MentionTextField.swift in Sources */ = {isa = PBXBuildFile; fileRef = A693ABEF2EE7AB4C00768F00 /* MentionTextField.swift */; };
 		A693ABF12EEA123400768F00 /* UserSelector.swift in Sources */ = {isa = PBXBuildFile; fileRef = A693ABF22EEA123400768F00 /* UserSelector.swift */; };
 		A693ABF32EEA234500768F00 /* PCMMasterSelector.swift in Sources */ = {isa = PBXBuildFile; fileRef = A693ABF42EEA234500768F00 /* PCMMasterSelector.swift */; };
@@ -51,6 +55,10 @@
 		069156 /* SaveViewDialog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveViewDialog.swift; sourceTree = "<group>"; };
 		2B4DE6 /* SavedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedView.swift; sourceTree = "<group>"; };
 		6C76CE /* ManageViewsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManageViewsSheet.swift; sourceTree = "<group>"; };
+		A650218B2F7B912100394A41 /* WorkflowPattern.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowPattern.swift; sourceTree = "<group>"; };
+		A650218D2F7B913600394A41 /* PromptLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PromptLoader.swift; sourceTree = "<group>"; };
+		A650218F2F7B914500394A41 /* IndigoSettingsTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IndigoSettingsTab.swift; sourceTree = "<group>"; };
+		A65021912F7B919100394A41 /* IndigoPrompt.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = IndigoPrompt.json; sourceTree = "<group>"; };
 		A693ABEF2EE7AB4C00768F00 /* MentionTextField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MentionTextField.swift; sourceTree = "<group>"; };
 		A693ABF22EEA123400768F00 /* UserSelector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserSelector.swift; sourceTree = "<group>"; };
 		A693ABF42EEA234500768F00 /* PCMMasterSelector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PCMMasterSelector.swift; sourceTree = "<group>"; };
@@ -102,6 +110,14 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		A65021922F7B919100394A41 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				A65021912F7B919100394A41 /* IndigoPrompt.json */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
 		A6CBA4BF2ED0397500528322 /* ViewModels */ = {
 			isa = PBXGroup;
 			children = (
@@ -131,6 +147,7 @@
 		FF0001 /* Viewpoint */ = {
 			isa = PBXGroup;
 			children = (
+				A65021922F7B919100394A41 /* Resources */,
 				A6AA1B012F0D98720047C3D2 /* EnvironmentKeys.swift */,
 				BB0001 /* ViewpointApp.swift */,
 				BB0002 /* ContentView.swift */,
@@ -150,6 +167,7 @@
 		FF0002 /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				A650218B2F7B912100394A41 /* WorkflowPattern.swift */,
 				A6BACF662ED7C002000A4D2B /* JQLAutocomplete.swift */,
 				BB0003 /* JiraModels.swift */,
 				A6CBA4BC2ED0395F00528322 /* IndigoModels.swift */,
@@ -161,6 +179,7 @@
 		FF0003 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				A650218D2F7B913600394A41 /* PromptLoader.swift */,
 				A6F144C22EE16DF5006F5F2C /* MenuBarManager.swift */,
 				BB0004 /* JiraService.swift */,
 				BB0013 /* Logger.swift */,
@@ -175,6 +194,7 @@
 		FF0004 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				A650218F2F7B914500394A41 /* IndigoSettingsTab.swift */,
 				D12345 /* SubmittableTextField.swift */,
 				F12345 /* MultilineTextField.swift */,
 				A693ABEF2EE7AB4C00768F00 /* MentionTextField.swift */,
@@ -274,6 +294,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				AA0008 /* Assets.xcassets in Resources */,
+				A65021932F7B919100394A41 /* IndigoPrompt.json in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -287,6 +308,7 @@
 				CAP001 /* Capability.swift in Sources */,
 				CAP002 /* CapabilityRegistry.swift in Sources */,
 				CAP003 /* JiraCapability.swift in Sources */,
+				A65021902F7B914500394A41 /* IndigoSettingsTab.swift in Sources */,
 				AA0001 /* ViewpointApp.swift in Sources */,
 				A6F144C52EE16E04006F5F2C /* MenuBarQuickCreateView.swift in Sources */,
 				AA0002 /* ContentView.swift in Sources */,
@@ -309,6 +331,7 @@
 				54A55E /* SaveViewDialog.swift in Sources */,
 				4EFE67 /* ManageViewsSheet.swift in Sources */,
 				AA0007 /* Configuration.swift in Sources */,
+				A650218C2F7B912100394A41 /* WorkflowPattern.swift in Sources */,
 				AA0009 /* PersistentSplitView.swift in Sources */,
 				AA0010 /* SettingsView.swift in Sources */,
 				AA0011 /* Logger.swift in Sources */,
@@ -319,6 +342,7 @@
 				A6BACF672ED7C002000A4D2B /* JQLAutocomplete.swift in Sources */,
 				A6CBA4BB2ED0395200528322 /* AudioRecorder.swift in Sources */,
 				C12345 /* SubmittableTextField.swift in Sources */,
+				A650218E2F7B913600394A41 /* PromptLoader.swift in Sources */,
 				E12345 /* MultilineTextField.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -457,10 +481,12 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = Viewpoint/Viewpoint.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = LDF8KBK2SH;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_INCOMING_NETWORK_CONNECTIONS = NO;
@@ -499,10 +525,12 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = Viewpoint/Viewpoint.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = LDF8KBK2SH;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_INCOMING_NETWORK_CONNECTIONS = NO;

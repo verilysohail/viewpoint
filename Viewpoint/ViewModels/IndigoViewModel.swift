@@ -52,7 +52,7 @@ class IndigoViewModel: ObservableObject {
 
         // Add welcome message
         addMessage(Message(
-            text: "👋 Hi! I'm Indigo, your AI assistant for Jira. Ask me to search for issues, update them, or create new ones using natural language.",
+            text: "👋 Hi! I'm Iris, your AI assistant for Jira. Ask me to search for issues, update them, or create new ones using natural language.",
             sender: .system
         ))
 
@@ -1449,7 +1449,7 @@ class IndigoViewModel: ObservableObject {
                     }
                 } else {
                     self.addMessage(Message(
-                        text: "Microphone permission denied. Please enable it in System Settings → Privacy & Security → Microphone, then restart Viewpoint.",
+                        text: "Microphone permission denied. Please enable it in System Settings → Privacy & Security → Microphone, then restart Indigo.",
                         sender: .system,
                         status: .error
                     ))
@@ -1546,7 +1546,7 @@ class IndigoViewModel: ObservableObject {
     func setWindowFloating(_ floating: Bool) {
         // Get the Indigo window
         for window in NSApplication.shared.windows {
-            if window.title == "Indigo" {
+            if window.title == "Iris" {
                 window.level = floating ? .floating : .normal
                 break
             }

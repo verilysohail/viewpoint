@@ -17,7 +17,7 @@ class Logger {
     private init() {
         // Create log file in app's container
         let containerURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        logDirectory = containerURL.appendingPathComponent("Viewpoint", isDirectory: true)
+        logDirectory = containerURL.appendingPathComponent("Indigo", isDirectory: true)
 
         // Create directory if it doesn't exist
         try? FileManager.default.createDirectory(at: logDirectory, withIntermediateDirectories: true)
@@ -39,7 +39,7 @@ class Logger {
         fileHandle?.seekToEndOfFile()
 
         // Log startup
-        log("=== Viewpoint started ===", level: .info)
+        log("=== Indigo started ===", level: .info)
         log("Log file: \(logFileURL.path)", level: .info)
     }
 

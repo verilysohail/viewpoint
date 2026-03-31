@@ -98,10 +98,10 @@ class MenuBarManager: NSObject, ObservableObject {
         let menu = NSMenu()
         menu.addItem(NSMenuItem(title: "Quick Create Issue", action: #selector(showQuickCreate), keyEquivalent: ""))
         menu.addItem(NSMenuItem.separator())
-        menu.addItem(NSMenuItem(title: "Show Viewpoint", action: #selector(showMainWindow), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: "Show Indigo", action: #selector(showMainWindow), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: "Settings...", action: #selector(showSettings), keyEquivalent: ","))
         menu.addItem(NSMenuItem.separator())
-        menu.addItem(NSMenuItem(title: "Quit Viewpoint", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+        menu.addItem(NSMenuItem(title: "Quit Indigo", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
 
         // Set targets
         menu.items[0].target = self
