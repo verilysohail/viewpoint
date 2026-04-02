@@ -394,7 +394,9 @@ class AIService {
         return issues.map { issue in
             let assignee = issue.assignee ?? "Unassigned"
             let reporter = issue.reporter ?? "Unknown"
-            return "\(issue.key) [\(issue.status), Assignee: \(assignee), Reporter: \(reporter)]: \(issue.summary)"
+            let estimate = formatTimeField(issue.fields.timeoriginalestimate)
+            let spent = formatTimeField(issue.fields.timespent)
+            return "\(issue.key) [\(issue.status), Assignee: \(assignee), Reporter: \(reporter), Estimate: \(estimate), Logged: \(spent)]: \(issue.summary)"
         }.joined(separator: "\n  ")
     }
 
